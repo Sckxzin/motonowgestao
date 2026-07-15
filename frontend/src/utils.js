@@ -55,6 +55,7 @@ export const VALOR_MINIMO_VENDA = {
   'ATV 200':            22788,
   'ATV EFI 200':        25000,
   'NEW ATV 200 EFI':    25000,
+  'NEW JET 125 EFI':    12000,
 };
 
 export function getValorMinimoVenda(modelo) {
@@ -93,6 +94,7 @@ export const MODELOS_MOTOS = [
   { modelo:'JEF 170',          motonow:11990, santander:13100, sant:true },
   { modelo:'SHI 250 EFI',      motonow:16990, santander:18400, sant:true },
   { modelo:'SBM 150',          motonow:13989, santander:14700, sant:true },
+  { modelo:'NEW JET 125 EFI',  motonow:10490, santander:11100, sant: true},
 ];
 
 const REPASSE = {
@@ -100,7 +102,7 @@ const REPASSE = {
   NEWJET125:9500, URBAN150EFI:18100, IRON250:19600, ATV125EFI:16000,
   SHI175CARB:12900, NEWJEF:12600, PHOENIX50:7100, JEF150EFI:13800,
   NEWATV200EFI:23600, NEWSHI175CARB:14100, NEWSHI175EFI:15300,
-  NEWJET50:9100, RIO125EFI:10600, RIO125:8900, SBM150:14700,
+  NEWJET50:9100, RIO125EFI:10600, RIO125:8900, SBM150:14700, NEWJET125EFI:11100
 };
 
 export const FILIAIS_REPASSE = ['SAO JOSE','MARAGOGI','CATENDE','XEXEU'];
