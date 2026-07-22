@@ -309,10 +309,9 @@ export default function DashboardAuto() {
         shineray: gap > 5 ? null : n(f.shineray),
         eduardo:  gap > 5 ? null : n(f.eduardo),
         total:    gap > 5 ? null : n(f.shineray)+n(f.eduardo),
-      eduardo:  n(f.eduardo),
-      total:    n(f.shineray) + n(f.eduardo),
-    }))
-  ,[fin]);
+      };
+    });
+  },[fin]);
 
   const finLast = fin.length ? [...fin].sort((a,b)=>b.data.localeCompare(a.data))[0] : null;
 
