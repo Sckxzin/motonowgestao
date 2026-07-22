@@ -280,18 +280,22 @@ export default function DashboardAuto() {
   },[base]);
 
   /* ── FINANCEIRO GRAFICO ── */
-  const finGraf = useMemo(()=>fin.map(f=>({
-    data:dtBR(f.data),
-    jotaCompra:n(f.jota_compra),
-    jotaVenda:n(f.jota_venda),
-    saldo:n(f.saldo),
-  })),[fin]);
+  const finGraf = useMemo(()=>[...fin]
+    .sort((a,b)=>a.data.localeCompare(b.data))
+    .map(f=>({
+      data:dtBR(f.data),
+      ts: new Date(f.data).getTime(), // timestamp para escala real
+      jotaCompra:n(f.jota_compra),
+      jotaVenda:n(f.jota_venda),
+      saldo:n(f.saldo),
+    })),[fin]);
 
   /* ── DÍVIDAS GRAFICO ── */
   const dividasGraf = useMemo(()=>[...fin]
     .sort((a,b)=>a.data.localeCompare(b.data))
     .map(f=>({
       data: dtBR(f.data),
+      ts: new Date(f.data).getTime(),
       shineray: n(f.shineray),
       eduardo:  n(f.eduardo),
       total:    n(f.shineray) + n(f.eduardo),
@@ -471,13 +475,15 @@ export default function DashboardAuto() {
               <ResponsiveContainer width="100%" height={470}>
                 <LineChart data={finGraf} margin={{top:18,right:16,bottom:30,left:8}}>
                   <CartesianGrid {...T.grid} />
-                  <XAxis dataKey="data" {...T.axis} />
+                  <XAxis dataKey="ts" scale="time" type="number" domain={['auto','auto']}
+                    tickFormatter={ts=>{ const d=new Date(ts); return `${String(d.getDate()).padStart(2,'0')}/${String(d.getMonth()+1).padStart(2,'0')}`; }}
+                    {...T.axis} angle={-30} textAnchor="end" height={60} />
                   <YAxis {...T.axis} />
-                  <Tooltip {...tip((v,nm)=>[brl(v),nm])} />
+                  <Tooltip {...tip((v,nm)=>[brl(v),nm])} labelFormatter={ts=>{ const d=new Date(ts); return `${String(d.getDate()).padStart(2,'0')}/${String(d.getMonth()+1).padStart(2,'0')}/${d.getFullYear()}`; }} />
                   <Legend />
-                  <Line type="monotone" dataKey="jotaVenda"  name="Jota Venda"  stroke="rgba(110,240,200,.92)" strokeWidth={3} dot={false} />
-                  <Line type="monotone" dataKey="jotaCompra" name="Jota Compra" stroke="rgba(120,160,255,.95)" strokeWidth={3} dot={false} />
-                  <Line type="monotone" dataKey="saldo"      name="Saldo"       stroke="rgba(255,190,90,.95)"  strokeWidth={2} dot={false} />
+                  <Line type="monotone" dataKey="jotaVenda"  name="Jota Venda"  stroke="rgba(110,240,200,.92)" strokeWidth={3} dot={{r:4}} />
+                  <Line type="monotone" dataKey="jotaCompra" name="Jota Compra" stroke="rgba(120,160,255,.95)" strokeWidth={3} dot={{r:4}} />
+                  <Line type="monotone" dataKey="saldo"      name="Saldo"       stroke="rgba(255,190,90,.95)"  strokeWidth={2} dot={{r:3}} />
                 </LineChart>
               </ResponsiveContainer>
             </Panel>
@@ -512,13 +518,15 @@ export default function DashboardAuto() {
               <ResponsiveContainer width="100%" height={470}>
                 <LineChart data={dividasGraf} margin={{top:18,right:16,bottom:30,left:8}}>
                   <CartesianGrid {...T.grid} />
-                  <XAxis dataKey="data" {...T.axis} />
+                  <XAxis dataKey="ts" scale="time" type="number" domain={['auto','auto']}
+                    tickFormatter={ts=>{ const d=new Date(ts); return `${String(d.getDate()).padStart(2,'0')}/${String(d.getMonth()+1).padStart(2,'0')}`; }}
+                    {...T.axis} angle={-30} textAnchor="end" height={60} />
                   <YAxis {...T.axis} />
-                  <Tooltip {...tip((v,nm)=>[brl(v),nm])} />
+                  <Tooltip {...tip((v,nm)=>[brl(v),nm])} labelFormatter={ts=>{ const d=new Date(ts); return `${String(d.getDate()).padStart(2,'0')}/${String(d.getMonth()+1).padStart(2,'0')}/${d.getFullYear()}`; }} />
                   <Legend />
-                  <Line type="monotone" dataKey="shineray" name="Shineray" stroke="rgba(255,100,100,.92)"  strokeWidth={3} dot={false} />
-                  <Line type="monotone" dataKey="eduardo"  name="Eduardo"  stroke="rgba(255,190,90,.95)"   strokeWidth={3} dot={false} />
-                  <Line type="monotone" dataKey="total"    name="Total"    stroke="rgba(220,100,255,.90)"  strokeWidth={2} dot={false} strokeDasharray="6 3" />
+                  <Line type="monotone" dataKey="shineray" name="Shineray" stroke="rgba(255,100,100,.92)"  strokeWidth={3} dot={{r:4}} />
+                  <Line type="monotone" dataKey="eduardo"  name="Eduardo"  stroke="rgba(255,190,90,.95)"   strokeWidth={3} dot={{r:4}} />
+                  <Line type="monotone" dataKey="total"    name="Total"    stroke="rgba(220,100,255,.90)"  strokeWidth={2} dot={{r:3}} strokeDasharray="6 3" />
                 </LineChart>
               </ResponsiveContainer>
             </Panel>
