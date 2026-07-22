@@ -281,21 +281,29 @@ export default function DashboardAuto() {
 
   /* ── FINANCEIRO GRAFICO ── */
   const finGraf = useMemo(()=>{
+    if (!fin.length) return [];
     const sorted = [...fin].sort((a,b)=>a.data.localeCompare(b.data));
-    return sorted.map((f,i)=>{
-      const prev = sorted[i-1];
-      const gap = prev ? (new Date(f.data)-new Date(prev.data))/(1000*60*60*24) : 0;
-      return {
-        data: dtBR(f.data),
-        jotaCompra: n(f.jota_compra),
-        jotaVenda:  n(f.jota_venda),
-        saldo:      n(f.saldo),
-        // Se gap > 5 dias, zera os valores do ponto anterior para criar "buraco" visual
-        jotaCompraGap: gap > 5 ? null : n(f.jota_compra),
-        jotaVendaGap:  gap > 5 ? null : n(f.jota_venda),
-        saldoGap:      gap > 5 ? null : n(f.saldo),
-      };
-    });
+    // Preenche todos os dias do período com o último valor conhecido (forward fill)
+    const result = [];
+    const inicio = new Date(sorted[0].data);
+    const fim = new Date(sorted[sorted.length-1].data);
+    let idx = 0;
+    let ultimo = { jota_compra: sorted[0].jota_compra, jota_venda: sorted[0].jota_venda, saldo: sorted[0].saldo };
+    for (let d = new Date(inicio); d <= fim; d.setDate(d.getDate()+1)) {
+      const iso = d.toISOString().slice(0,10);
+      // Avança o índice se chegou no próximo registro
+      while (idx < sorted.length && sorted[idx].data <= iso) {
+        ultimo = sorted[idx];
+        idx++;
+      }
+      result.push({
+        data: dtBR(iso),
+        jotaCompra: n(ultimo.jota_compra),
+        jotaVenda:  n(ultimo.jota_venda),
+        saldo:      n(ultimo.saldo),
+      });
+    }
+    return result;
   },[fin]);
 
   /* ── DÍVIDAS GRAFICO ── */
