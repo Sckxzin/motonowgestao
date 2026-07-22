@@ -299,19 +299,15 @@ export default function DashboardAuto() {
   },[fin]);
 
   /* ── DÍVIDAS GRAFICO ── */
-  const dividasGraf = useMemo(()=>{
-    const sorted = [...fin].sort((a,b)=>a.data.localeCompare(b.data));
-    return sorted.map((f,i)=>{
-      const prev = sorted[i-1];
-      const gap = prev ? (new Date(f.data)-new Date(prev.data))/(1000*60*60*24) : 0;
-      return {
-        data: dtBR(f.data),
-        shineray: gap > 5 ? null : n(f.shineray),
-        eduardo:  gap > 5 ? null : n(f.eduardo),
-        total:    gap > 5 ? null : n(f.shineray)+n(f.eduardo),
-      };
-    });
-  },[fin]);
+  const dividasGraf = useMemo(()=>[...fin]
+    .sort((a,b)=>a.data.localeCompare(b.data))
+    .map(f=>({
+      data: dtBR(f.data),
+      shineray: n(f.shineray),
+      eduardo:  n(f.eduardo),
+      total:    n(f.shineray) + n(f.eduardo),
+    }))
+  ,[fin]);
 
   const finLast = fin.length ? [...fin].sort((a,b)=>b.data.localeCompare(a.data))[0] : null;
 
@@ -531,9 +527,9 @@ export default function DashboardAuto() {
                   <YAxis {...T.axis} />
                   <Tooltip {...tip((v,nm)=>[brl(v),nm])} />
                   <Legend />
-                  <Line type="monotone" dataKey="shineray" name="Shineray" stroke="rgba(255,100,100,.92)"  strokeWidth={3} dot={{r:3}} connectNulls={false} />
-                  <Line type="monotone" dataKey="eduardo"  name="Eduardo"  stroke="rgba(255,190,90,.95)"   strokeWidth={3} dot={{r:3}} connectNulls={false} />
-                  <Line type="monotone" dataKey="total"    name="Total"    stroke="rgba(220,100,255,.90)"  strokeWidth={2} dot={{r:3}} connectNulls={false} strokeDasharray="6 3" />
+                  <Line type="monotone" dataKey="shineray" name="Shineray" stroke="rgba(255,100,100,.92)"  strokeWidth={3} dot={false} />
+                  <Line type="monotone" dataKey="eduardo"  name="Eduardo"  stroke="rgba(255,190,90,.95)"   strokeWidth={3} dot={false} />
+                  <Line type="monotone" dataKey="total"    name="Total"    stroke="rgba(220,100,255,.90)"  strokeWidth={2} dot={false} strokeDasharray="6 3" />
                 </LineChart>
               </ResponsiveContainer>
             </Panel>
