@@ -308,7 +308,7 @@ export default function DashboardAuto() {
       });
     }
     return result;
-  },[fin]);
+  },[fin,di,df]);
 
   /* ── DÍVIDAS GRAFICO ── */
   const dividasGraf = useMemo(()=>[...fin]
