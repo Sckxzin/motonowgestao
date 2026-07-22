@@ -282,7 +282,11 @@ export default function DashboardAuto() {
   /* ── FINANCEIRO GRAFICO ── */
   const finGraf = useMemo(()=>{
     if (!fin.length) return [];
-    const sorted = [...fin].sort((a,b)=>a.data.localeCompare(b.data));
+    // Aplica filtro de datas se definido
+    const sorted = [...fin]
+      .filter(f => (!di || f.data >= di) && (!df || f.data <= df))
+      .sort((a,b)=>a.data.localeCompare(b.data));
+    if (!sorted.length) return [];
     // Preenche todos os dias do período com o último valor conhecido (forward fill)
     const result = [];
     const inicio = new Date(sorted[0].data);
@@ -308,6 +312,7 @@ export default function DashboardAuto() {
 
   /* ── DÍVIDAS GRAFICO ── */
   const dividasGraf = useMemo(()=>[...fin]
+    .filter(f => (!di || f.data >= di) && (!df || f.data <= df))
     .sort((a,b)=>a.data.localeCompare(b.data))
     .map(f=>({
       data: dtBR(f.data),
@@ -315,7 +320,7 @@ export default function DashboardAuto() {
       eduardo:  n(f.eduardo),
       total:    n(f.shineray) + n(f.eduardo),
     }))
-  ,[fin]);
+  ,[fin,di,df]);
 
   const finLast = fin.length ? [...fin].sort((a,b)=>b.data.localeCompare(a.data))[0] : null;
 
