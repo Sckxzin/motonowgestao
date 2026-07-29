@@ -196,6 +196,10 @@ export default function VendasMotos() {
     }
 
     return true;
+  }).sort((a,b)=>{
+    const da = (a.data_venda||a.created_at||'').slice(0,10);
+    const db2 = (b.data_venda||b.created_at||'').slice(0,10);
+    return db2.localeCompare(da);
   }), [vendas, empresa, cidades, dataIni, dataFim, busca]);
 
   // Totais
