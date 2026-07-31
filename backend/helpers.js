@@ -26,7 +26,7 @@ const REPASSE_MAP = {
   [normKey('ATV 125 EFI')]:      16000,
   [normKey('SHI 175 CARB')]:     12900,
   [normKey('NEW JEF')]:          12600,
-  [normKey('PHOENIX 50')]:       7100,
+  [normKey('PHOENIX 50s')]:       7100,
   [normKey('JEF 150 EFI')]:      13800,
   [normKey('NEW ATV 200 EFI')]:  23600,
   [normKey('NEW SHI 175 CARB')]: 14100,
