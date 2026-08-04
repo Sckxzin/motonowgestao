@@ -205,10 +205,12 @@ export default function Home() {
   const coresUnicas = [...new Set(motos.filter(m=>m.status!=='VENDIDA').map(m=>(m.cor||'').toUpperCase().trim()).filter(Boolean))].sort();
 
   const resumo = motos.filter(m=>m.status!=='VENDIDA').reduce((a,m)=>{
-    if(!a[m.filial]) a[m.filial]={d:0,n:0,p:0};
+    if(!a[m.filial]) a[m.filial]={d:0,n:0,p:0,mn:0,em:0,valor:0};
     if(m.status==='DISPONIVEL') a[m.filial].d++;
     else if(m.status==='NEGOCIACAO') a[m.filial].n++;
     else if(m.status==='PENDENTE_APROVACAO') a[m.filial].p++;
+    if(m.santander) a[m.filial].em++; else a[m.filial].mn++;
+    a[m.filial].valor += Number(m.valor_minimo_venda||0);
     return a;
   },{});
 
@@ -311,6 +313,15 @@ export default function Home() {
                   {d.n>0&&<span style={{color:'var(--blu)'}}>🔵{d.n}</span>}
                   {d.p>0&&<span style={{color:'var(--yel)'}}>🟡{d.p}</span>}
                 </div>
+                {isDir(user) && (
+                  <div style={{marginTop:6,paddingTop:6,borderTop:'1px solid var(--bd)'}}>
+                    <div style={{display:'flex',gap:10,fontSize:11,color:'var(--tx3)',marginBottom:3}}>
+                      <span>MN: <b style={{color:'var(--tx2)'}}>{d.mn}</b></span>
+                      <span>EM: <b style={{color:'var(--tx2)'}}>{d.em}</b></span>
+                    </div>
+                    <div style={{fontSize:12,fontWeight:700,color:'var(--grn)'}}>{formatBRL(d.valor)}</div>
+                  </div>
+                )}
               </div>
             ))}
           </div>
