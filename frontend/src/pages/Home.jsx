@@ -106,6 +106,17 @@ export default function Home() {
     URL.revokeObjectURL(url);
   }
 
+  function exportarMotosExcel() {
+    const header = ['Modelo','Ano','Cor','Chassi','Filial','Empresa','CNPJ','Status','Valor Compra','Valor Minimo Venda'];
+    const linhas = [header, ...motosFilt.map(m => [m.modelo, m.ano_moto, m.cor, m.chassi, m.filial, m.santander?'EMENEZES':'MOTONOW', m.cnpj_empresa||'', Number(m.valor_compra||0), Number(m.valor_minimo_venda||0)])];
+    const csv = linhas.map(r => r.join(';')).join('\r\n');
+    const blob = new Blob(['\uFEFF'+csv], {type:'text/csv;charset=utf-8;'});
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = 'motos.csv'; a.click();
+    URL.revokeObjectURL(url);
+  }
+
   function addCart(p) {
     const c = JSON.parse(localStorage.getItem('mn_cart')||'[]');
     const ex = c.find(i=>i.peca_id===p.id);
@@ -306,7 +317,10 @@ export default function Home() {
         {tab==='motos' && <>
           <div className="sh">
             <span className="sh-t">Estoque de motos</span>
-            {isDir(user) && <button className="btn btn-p btn-sm" onClick={()=>setModCadM(true)}>+ Cadastrar moto</button>}
+            <div style={{display:'flex',gap:6}}>
+              <button className="btn btn-g btn-sm" onClick={exportarMotosExcel}>📊 Exportar Excel</button>
+              {isDir(user) && <button className="btn btn-p btn-sm" onClick={()=>setModCadM(true)}>+ Cadastrar moto</button>}
+            </div>
           </div>
 
           <div style={{display:'flex',gap:8,flexWrap:'wrap',marginBottom:isDir(user)?10:16}}>
