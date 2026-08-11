@@ -305,6 +305,7 @@ export default function VendasMotos() {
         case 'repasse':    return Number(v.repasse||0).toFixed(2);
         case 'a_repassar': return getARepassar(v).toFixed(2);
         case 'liquido':    return getLiquido(v).toFixed(2);
+        case 'pagamento':  return v.forma_pagamento || '';
         case 'gasolina':   return Number(v.gasolina||0).toFixed(2);
         case 'comissao':   return Number(v.comissao_valor||0).toFixed(2);
         case 'empresa':    return getEmpresa(v);
