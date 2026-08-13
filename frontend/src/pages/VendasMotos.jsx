@@ -146,6 +146,9 @@ export default function VendasMotos() {
   const [edit, setEdit] = useState(null);
   const [ef, setEf]     = useState({});
 
+  // Relatório de verificação pós-exclusão de duplicados
+  const [verificacao, setVerificacao] = useState(null); // array de {chassi, modelo, status, filial} | null
+
   useEffect(() => {
     if (!user) { nav('/'); return; }
     api.get('/vendas-motos')
@@ -384,6 +387,23 @@ export default function VendasMotos() {
     }
     setVendas(prev => prev.filter(v => !paraExcluir.some(p => p.id === v.id)));
     show(falhas === 0 ? `${ok} duplicado(s) excluído(s)!` : `${ok} excluído(s), ${falhas} falharam.`, falhas ? 'err' : undefined);
+
+    // Verificação: busca o estoque atual e confere o status dos chassis afetados
+    try {
+      const r = await api.get('/motos');
+      const estoque = r.data || [];
+      const chassisAfetados = [...new Set(mantidas.map(v => (v.chassi||'').trim().toUpperCase()).filter(Boolean))];
+      const relatorio = chassisAfetados.map(c => {
+        const m = estoque.find(x => (x.chassi||'').trim().toUpperCase() === c);
+        return {
+          chassi: c,
+          modelo: m ? m.modelo : (mantidas.find(v=>(v.chassi||'').trim().toUpperCase()===c)?.modelo || '—'),
+          filial: m ? m.filial : '—',
+          status: m ? m.status : 'NÃO ENCONTRADA NO ESTOQUE',
+        };
+      });
+      setVerificacao(relatorio);
+    } catch { /* verificação é best-effort; a exclusão em si já foi concluída */ }
   }
 
   async function salvarEdit() {
@@ -642,6 +662,32 @@ export default function VendasMotos() {
             <div className="mfoot">
               <button className="btn btn-g" onClick={()=>setEdit(null)}>Cancelar</button>
               <button className="btn btn-p" onClick={salvarEdit}>💾 Salvar</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL VERIFICAÇÃO PÓS-EXCLUSÃO DE DUPLICADOS */}
+      {verificacao && (
+        <div className="mbg" onClick={()=>setVerificacao(null)}>
+          <div className="mbox" onClick={e=>e.stopPropagation()}>
+            <div className="mhd"><h3>🔍 Status das motos no estoque</h3><button className="mclose" onClick={()=>setVerificacao(null)}>×</button></div>
+            <p style={{fontSize:12,color:'var(--tx3)',marginBottom:12}}>Conferência dos chassis que tiveram duplicados removidos. Todas deveriam aparecer como <b style={{color:'var(--grn)'}}>VENDIDA</b>.</p>
+            {verificacao.length === 0 && <p style={{fontSize:13,color:'var(--tx3)'}}>Nenhum chassi para conferir.</p>}
+            {verificacao.map(r => {
+              const ok = r.status === 'VENDIDA';
+              return (
+                <div key={r.chassi} style={{display:'flex',justifyContent:'space-between',alignItems:'center',gap:10,padding:'8px 12px',marginBottom:6,borderRadius:'var(--r)',background: ok ? 'var(--grndim)' : 'var(--reddim)',border:`1px solid ${ok?'var(--grnbd)':'var(--redbd)'}`}}>
+                  <div>
+                    <div style={{fontSize:13,fontWeight:600}}>{r.modelo} <span style={{fontFamily:'var(--mono)',fontSize:11,color:'var(--tx3)',fontWeight:400}}>{r.chassi}</span></div>
+                    <div style={{fontSize:11,color:'var(--tx3)'}}>{r.filial}</div>
+                  </div>
+                  <span className={`badge ${ok?'b-grn':'b-red'}`}>{r.status}</span>
+                </div>
+              );
+            })}
+            <div className="mfoot">
+              <button className="btn btn-p" onClick={()=>setVerificacao(null)}>Fechar</button>
             </div>
           </div>
         </div>
