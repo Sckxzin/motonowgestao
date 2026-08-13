@@ -67,7 +67,7 @@ const REPASSE_MOTONOW = {
   'PT1 S':           1000,
   'ATV 125':         2810,
   'ATV 125 EFI':     3610,
-  
+  'ATV 200':         2010, 'ATV 200 EFI':      2010, 'ATV EFI 200':      2010,
 };
 
 function getRepasseFixo(modelo) {
@@ -357,6 +357,7 @@ export default function VendasMotos() {
       grupos[c].push(v);
     });
     const paraExcluir = [];
+    const mantidas = [];
     Object.values(grupos).forEach(grupo => {
       if (grupo.length < 2) return;
       const ordenado = [...grupo].sort((a,b) => {
@@ -365,14 +366,21 @@ export default function VendasMotos() {
         if (da !== db2) return db2.localeCompare(da);
         return (b.id||0) - (a.id||0);
       });
+      mantidas.push(ordenado[0]);
       paraExcluir.push(...ordenado.slice(1));
     });
     if (paraExcluir.length === 0) { show('Nenhum duplicado encontrado.'); return; }
-    if (!window.confirm(`Excluir ${paraExcluir.length} venda(s) duplicada(s)? Será mantida a mais recente de cada chassi. As motos voltarão para o estoque como Disponível.`)) return;
+    if (!window.confirm(`Excluir ${paraExcluir.length} venda(s) duplicada(s)? Será mantida a mais recente de cada chassi. A moto continuará marcada como Vendida.`)) return;
     let ok = 0, falhas = 0;
     for (const v of paraExcluir) {
       try { await api.delete('/vendas-motos/'+v.id); ok++; }
       catch { falhas++; }
+    }
+    // A exclusão pode reverter a moto para "Disponível" no estoque — como ainda resta
+    // uma venda válida do mesmo chassi, reforça o status de volta para VENDIDA.
+    for (const v of mantidas) {
+      if (!v.moto_id) continue;
+      try { await api.put(`/motos/${v.moto_id}/status`, { status:'VENDIDA' }); } catch {}
     }
     setVendas(prev => prev.filter(v => !paraExcluir.some(p => p.id === v.id)));
     show(falhas === 0 ? `${ok} duplicado(s) excluído(s)!` : `${ok} excluído(s), ${falhas} falharam.`, falhas ? 'err' : undefined);
