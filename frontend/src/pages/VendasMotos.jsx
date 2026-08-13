@@ -131,6 +131,7 @@ export default function VendasMotos() {
   const [busca,      setBusca]      = useState('');
   const [showCids,   setShowCids]   = useState(false);
   const [showCols,   setShowCols]   = useState(false);
+  const [soDuplicados, setSoDuplicados] = useState(false);
 
   // Colunas (persiste localStorage)
   const [compacto, setCompacto] = useState(() => localStorage.getItem('mn_vm_compact') === '1');
@@ -165,6 +166,17 @@ export default function VendasMotos() {
     setCidades(p => { const b = p.filter(x=>x!=='TODAS'); return b.includes(v) ? b.filter(x=>x!==v) : [...b,v]; });
   }
 
+  // Chassis duplicados no histórico (mesmo chassi em mais de uma venda)
+  const chassisDuplicados = useMemo(() => {
+    const contagem = {};
+    vendas.forEach(v => {
+      const c = (v.chassi||'').trim().toUpperCase();
+      if (!c) return;
+      contagem[c] = (contagem[c]||0) + 1;
+    });
+    return new Set(Object.keys(contagem).filter(c => contagem[c] > 1));
+  }, [vendas]);
+
   // Filtragem
   const filtered = useMemo(() => vendas.filter(v => {
     const emp = getEmpresa(v);
@@ -195,12 +207,14 @@ export default function VendasMotos() {
       if (!match) return false;
     }
 
+    if (soDuplicados && !chassisDuplicados.has((v.chassi||'').trim().toUpperCase())) return false;
+
     return true;
   }).sort((a,b)=>{
     const da = (a.data_venda||a.created_at||'').slice(0,10);
     const db2 = (b.data_venda||b.created_at||'').slice(0,10);
     return db2.localeCompare(da);
-  }), [vendas, empresa, cidades, dataIni, dataFim, busca]);
+  }), [vendas, empresa, cidades, dataIni, dataFim, busca, soDuplicados, chassisDuplicados]);
 
   // Totais
   const totais = useMemo(() => {
@@ -333,6 +347,37 @@ export default function VendasMotos() {
     } catch(e) { show(String(e),'err'); }
   }
 
+  async function excluirTodosDuplicados() {
+    // Agrupa por chassi, mantém a venda mais recente (maior data_venda/created_at, desempate por maior id) de cada grupo
+    const grupos = {};
+    vendas.forEach(v => {
+      const c = (v.chassi||'').trim().toUpperCase();
+      if (!c) return;
+      if (!grupos[c]) grupos[c] = [];
+      grupos[c].push(v);
+    });
+    const paraExcluir = [];
+    Object.values(grupos).forEach(grupo => {
+      if (grupo.length < 2) return;
+      const ordenado = [...grupo].sort((a,b) => {
+        const da = (a.data_venda||a.created_at||'');
+        const db2 = (b.data_venda||b.created_at||'');
+        if (da !== db2) return db2.localeCompare(da);
+        return (b.id||0) - (a.id||0);
+      });
+      paraExcluir.push(...ordenado.slice(1));
+    });
+    if (paraExcluir.length === 0) { show('Nenhum duplicado encontrado.'); return; }
+    if (!window.confirm(`Excluir ${paraExcluir.length} venda(s) duplicada(s)? Será mantida a mais recente de cada chassi. As motos voltarão para o estoque como Disponível.`)) return;
+    let ok = 0, falhas = 0;
+    for (const v of paraExcluir) {
+      try { await api.delete('/vendas-motos/'+v.id); ok++; }
+      catch { falhas++; }
+    }
+    setVendas(prev => prev.filter(v => !paraExcluir.some(p => p.id === v.id)));
+    show(falhas === 0 ? `${ok} duplicado(s) excluído(s)!` : `${ok} excluído(s), ${falhas} falharam.`, falhas ? 'err' : undefined);
+  }
+
   async function salvarEdit() {
     try {
       const r = await api.put(`/vendas-motos/${edit.id}`, ef);
@@ -357,7 +402,17 @@ export default function VendasMotos() {
       <div className="pc">
         <div className="sh">
           <span className="sh-t">🏍 Histórico de Vendas de Motos</span>
-          <div style={{display:'flex',gap:8}}>
+          <div style={{display:'flex',gap:8,flexWrap:'wrap'}}>
+            {chassisDuplicados.size > 0 && (
+              <>
+                <button className={`btn btn-sm ${soDuplicados?'btn-p':'btn-g'}`} onClick={()=>setSoDuplicados(v=>!v)}>
+                  ⚠️ {soDuplicados ? 'Ver todos' : `Ver duplicados (${chassisDuplicados.size})`}
+                </button>
+                <button className="btn btn-sm" style={{background:'var(--red)',color:'#fff'}} onClick={excluirTodosDuplicados}>
+                  🗑 Apagar duplicados
+                </button>
+              </>
+            )}
             <button className="btn btn-g btn-sm" onClick={()=>setShowCols(v=>!v)}>🧩 Colunas</button>
             <button className="btn btn-p btn-sm" onClick={exportarCSV}>📥 CSV</button>
           </div>
