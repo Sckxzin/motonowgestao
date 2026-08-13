@@ -67,7 +67,7 @@ const REPASSE_MOTONOW = {
   'PT1 S':           1000,
   'ATV 125':         2810,
   'ATV 125 EFI':     3610,
-  'ATV 200':         2010, 'ATV 200 EFI':      2010, 'ATV EFI 200':      2010,
+  
 };
 
 function getRepasseFixo(modelo) {
