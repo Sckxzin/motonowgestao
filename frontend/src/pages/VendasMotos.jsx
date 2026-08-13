@@ -350,6 +350,26 @@ export default function VendasMotos() {
     } catch(e) { show(String(e),'err'); }
   }
 
+  async function verificarEstoqueAtual() {
+    if (filtered.length === 0) { show('Nenhuma venda nos filtros atuais para conferir.', 'err'); return; }
+    if (filtered.length > 50 && !window.confirm(`${filtered.length} vendas nos filtros atuais. Isso vai listar bastante coisa — quer filtrar por chassi/período antes? Clique OK para continuar mesmo assim.`)) return;
+    try {
+      const r = await api.get('/motos');
+      const estoque = r.data || [];
+      const chassisAlvo = [...new Set(filtered.map(v => (v.chassi||'').trim().toUpperCase()).filter(Boolean))];
+      const relatorio = chassisAlvo.map(c => {
+        const m = estoque.find(x => (x.chassi||'').trim().toUpperCase() === c);
+        return {
+          chassi: c,
+          modelo: m ? m.modelo : (filtered.find(v=>(v.chassi||'').trim().toUpperCase()===c)?.modelo || '—'),
+          filial: m ? m.filial : '—',
+          status: m ? m.status : 'NÃO ENCONTRADA NO ESTOQUE',
+        };
+      });
+      setVerificacao(relatorio);
+    } catch (e) { show(String(e), 'err'); }
+  }
+
   async function excluirTodosDuplicados() {
     // Agrupa por chassi, mantém a venda mais recente (maior data_venda/created_at, desempate por maior id) de cada grupo
     const grupos = {};
@@ -441,6 +461,7 @@ export default function VendasMotos() {
                 </button>
               </>
             )}
+            <button className="btn btn-g btn-sm" onClick={verificarEstoqueAtual}>🔍 Verificar estoque</button>
             <button className="btn btn-g btn-sm" onClick={()=>setShowCols(v=>!v)}>🧩 Colunas</button>
             <button className="btn btn-p btn-sm" onClick={exportarCSV}>📥 CSV</button>
           </div>
@@ -672,7 +693,7 @@ export default function VendasMotos() {
         <div className="mbg" onClick={()=>setVerificacao(null)}>
           <div className="mbox" onClick={e=>e.stopPropagation()}>
             <div className="mhd"><h3>🔍 Status das motos no estoque</h3><button className="mclose" onClick={()=>setVerificacao(null)}>×</button></div>
-            <p style={{fontSize:12,color:'var(--tx3)',marginBottom:12}}>Conferência dos chassis que tiveram duplicados removidos. Todas deveriam aparecer como <b style={{color:'var(--grn)'}}>VENDIDA</b>.</p>
+            <p style={{fontSize:12,color:'var(--tx3)',marginBottom:12}}>Status atual no estoque dos chassis do histórico filtrado. Vendas concluídas deveriam aparecer como <b style={{color:'var(--grn)'}}>VENDIDA</b>.</p>
             {verificacao.length === 0 && <p style={{fontSize:13,color:'var(--tx3)'}}>Nenhum chassi para conferir.</p>}
             {verificacao.map(r => {
               const ok = r.status === 'VENDIDA';
