@@ -804,7 +804,12 @@ app.get('/financeiro-dashboard', auth, adminOnly, async (req, res) => {
 app.get('/historico-estoque', auth, adminOnly, async (req, res) => {
   try {
     const motos = await db.q('SELECT id,chassi,valor_compra,valor_minimo_venda,status,created_at FROM motos ORDER BY created_at ASC',[]);
-    const vendas = await db.q('SELECT TRIM(chassi) as chassi,data_venda FROM vendas_motos WHERE data_venda IS NOT NULL ORDER BY data_venda ASC',[]);
+   const vendas = await db.q(`
+  SELECT TRIM(chassi) as chassi, data_venda 
+  FROM motos 
+  WHERE status = 'VENDIDA' AND data_venda IS NOT NULL 
+  ORDER BY data_venda ASC
+`,[]);
     const vendaMap = {};
     vendas.forEach(v=>{ const ch=(v.chassi||'').trim().toUpperCase(); if (!vendaMap[ch]) vendaMap[ch]=v.data_venda; });
     const motosEnriquecidas = motos.map(m=>({ ...m, data_venda_real: vendaMap[(m.chassi||'').trim().toUpperCase()]||null }));
