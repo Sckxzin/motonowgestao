@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import Topbar from '../components/Topbar';
 import useToast from '../hooks/useToast';
 import api from '../api';
-import { getUser, formatBRL, fmtDate, FILIAIS } from '../utils';
+import { getUser, formatBRL, fmtDate, FILIAIS, calcularValorLiquido, tierComissao, findComissaoRow } from '../utils';
 
 const CIDADES_PADRAO = ['ESCADA','IPOJUCA','RIBEIRAO','SAO JOSE','CATENDE','XEXEU','MARAGOGI','IPOJUCA RICO','CHA GRANDE','TENDA'];
 
@@ -21,6 +21,7 @@ const TODAS_COLUNAS = [
   { key:'liquido',       label:'Líquido',       fixed:false, w:90  },
   { key:'pagamento',     label:'Pagamento',     fixed:false, w:160 },
   { key:'gasolina',      label:'Gasolina',      fixed:false, w:80  },
+  { key:'entrega',       label:'Entrega',       fixed:false, w:80  },
   { key:'filial',        label:'Filial venda',  fixed:false, w:100 },
   { key:'origem',        label:'Filial origem', fixed:false, w:110 },
   { key:'empresa',       label:'Empresa',       fixed:false, w:90  },
@@ -145,6 +146,14 @@ export default function VendasMotos() {
   // Modal editar
   const [edit, setEdit] = useState(null);
   const [ef, setEf]     = useState({});
+  const [comissoes, setComissoes] = useState([]);
+
+  useEffect(() => { api.get('/comissoes').then(r=>setComissoes(r.data)).catch(()=>{}); }, []);
+  const comissaoCalculada = useMemo(() => {
+    if (!edit) return 0;
+    const liquido = calcularValorLiquido({ valor:ef.valor, brinde:ef.brinde, gasolina:ef.gasolina, entrega_valor:ef.entrega_valor, emplacamento:ef.emplacamento });
+    return tierComissao(findComissaoRow(comissoes, ef.modelo), liquido);
+  }, [edit, ef.valor, ef.brinde, ef.gasolina, ef.entrega_valor, ef.emplacamento, ef.modelo, comissoes]);
 
   // Relatório de verificação pós-exclusão de duplicados
   const [verificacao, setVerificacao] = useState(null); // array de {chassi, modelo, status, filial} | null
@@ -272,6 +281,7 @@ export default function VendasMotos() {
       case 'liquido':     return <b style={{color: getLiquido(v) >= 0 ? 'var(--grn)' : 'var(--red)'}}>{formatBRL(getLiquido(v))}</b>;
       case 'pagamento': return <span style={{fontSize:11,wordBreak:'break-word'}}>{v.forma_pagamento||'—'}</span>;
       case 'gasolina':    return v.gasolina ? formatBRL(v.gasolina) : '-';
+      case 'entrega':     return v.entrega_valor ? formatBRL(v.entrega_valor) : '-';
       case 'filial':      return v.filial_venda || '-';
       case 'origem':      return v.filial_origem || '-';
       case 'empresa':     return <span className={`badge ${getEmpresa(v)==='EMENEZES'?'b-yel':'b-blu'}`}>{getEmpresa(v)}</span>;
@@ -302,8 +312,8 @@ export default function VendasMotos() {
           valor:v.valor||'', valor_compra:v.valor_compra||'', repasse:v.repasse||'',
           forma_pagamento:v.forma_pagamento||'', como_chegou:v.como_chegou||'',
           gasolina:v.gasolina||0, brinde:!!v.brinde, santander:!!v.santander,
-          cnpj_empresa:v.cnpj_empresa||'', comissao_valor:v.comissao_valor||0,
-          rp:!!v.rp, rr:!!v.rr, emplacamento:v.emplacamento||0,
+          cnpj_empresa:v.cnpj_empresa||'',
+          rp:!!v.rp, rr:!!v.rr, emplacamento:v.emplacamento||0, entrega_valor:v.entrega_valor||0,
           data_venda:v.data_venda?v.data_venda.slice(0,10):''
         }); }}>✏️ Editar</button>
         <button className="ab red" onClick={()=>excluirVenda(v.id)}>🗑</button>
@@ -324,12 +334,13 @@ export default function VendasMotos() {
         case 'liquido':    return getLiquido(v).toFixed(2);
         case 'pagamento':  return v.forma_pagamento || '';
         case 'gasolina':   return Number(v.gasolina||0).toFixed(2);
+        case 'entrega':    return Number(v.entrega_valor||0).toFixed(2);
         case 'comissao':   return Number(v.comissao_valor||0).toFixed(2);
         case 'empresa':    return getEmpresa(v);
         case 'brinde':     return v.brinde ? 'SIM' : 'NÃO';
         case 'rp':         return v.rp ? 'SIM' : 'NÃO';
         case 'rr':         return v.rr ? 'SIM' : 'NÃO';
-        case 'emplacamento': return v.emplacamento ? 'SIM' : 'NÃO';
+        case 'emplacamento': return Number(v.emplacamento||0).toFixed(2);
         case 'chassi':     return (v.chassi||'').trim();
         default:           return v[c.key] ?? '';
       }
@@ -650,7 +661,9 @@ export default function VendasMotos() {
             </div>
             <div className="g2">
               <div className="field"><label>Repasse (R$)</label><input className="inp" type="number" step="0.01" value={ef.repasse} onChange={e=>setEf({...ef,repasse:e.target.value})} /></div>
-              <div className="field"><label>Comissão (R$)</label><input className="inp" type="number" step="0.01" value={ef.comissao_valor} onChange={e=>setEf({...ef,comissao_valor:e.target.value})} /></div>
+              <div className="field"><label>Comissão (calculada)</label>
+                <div className="inp" style={{display:'flex',alignItems:'center',fontWeight:600,color:'var(--grn)'}}>{formatBRL(comissaoCalculada)}</div>
+              </div>
             </div>
             <div className="g2">
               <div className="field"><label>Forma pagamento</label><input className="inp" value={ef.forma_pagamento} onChange={e=>setEf({...ef,forma_pagamento:e.target.value})} /></div>
@@ -663,14 +676,10 @@ export default function VendasMotos() {
             </div>
             <div className="g2">
               <div className="field"><label>⛽ Gasolina (R$)</label><input className="inp" type="number" value={ef.gasolina} onChange={e=>setEf({...ef,gasolina:e.target.value})} /></div>
-              <div className="field"><label>📋 Emplacamento (R$)</label>
-                <input className="inp" type="number" step="0.01" value={ef.emplacamento} onChange={e=>setEf({...ef,emplacamento:e.target.value})} />
-                {Number(ef.emplacamento||0) > 0 && (
-                  <div style={{fontSize:11,marginTop:4,color:'var(--tx3)'}}>
-                    {formatBRL(Number(ef.valor||0))} − {formatBRL(Number(ef.emplacamento||0))} = <b style={{color:'var(--grn)'}}>{formatBRL(Number(ef.valor||0)-Number(ef.emplacamento||0))}</b>
-                  </div>
-                )}
-              </div>
+              <div className="field"><label>🛵 Entrega (R$)</label><input className="inp" type="number" step="0.01" value={ef.entrega_valor} onChange={e=>setEf({...ef,entrega_valor:e.target.value})} /></div>
+            </div>
+            <div className="field"><label>📋 Emplacamento (R$)</label>
+              <input className="inp" type="number" step="0.01" value={ef.emplacamento} onChange={e=>setEf({...ef,emplacamento:e.target.value})} />
             </div>
             <div className="field"><label>CNPJ empresa</label><input className="inp" value={ef.cnpj_empresa} onChange={e=>setEf({...ef,cnpj_empresa:e.target.value})} /></div>
             <div style={{display:'flex',gap:20,marginTop:8,flexWrap:'wrap'}}>

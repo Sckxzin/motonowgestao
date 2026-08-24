@@ -4,7 +4,7 @@ const cors    = require('cors');
 const jwt     = require('jsonwebtoken');
 const bcrypt  = require('bcryptjs');
 const db      = require('./db');
-const { isRepasseObrigatorio, getRepasse, calcularComissao } = require('./helpers');
+const { isRepasseObrigatorio, getRepasse, calcularComissao, calcularValorLiquido, tierComissao } = require('./helpers');
 
 const app = express();
 const JWT  = process.env.JWT_SECRET || 'motonow_secret_2024';
@@ -294,7 +294,7 @@ app.post('/motos/transferir', auth, adminOnly, async (req, res) => {
   finally { client.release(); }
 });
 app.post('/motos/vender', auth, async (req, res) => {
-  const { moto_id, nome_cliente, cpf, numero_cliente, valor, forma_pagamento, brinde, gasolina, como_chegou, filial_venda, local_retirada, filial_retirada, data_venda, cliente_id, emplacamento } = req.body;
+  const { moto_id, nome_cliente, cpf, numero_cliente, valor, forma_pagamento, brinde, gasolina, como_chegou, filial_venda, local_retirada, filial_retirada, data_venda, cliente_id, emplacamento, entrega_km } = req.body;
   if (!moto_id||!filial_venda||!nome_cliente||!valor) return res.status(400).json({ error:'Dados incompletos' });
   const client = await db.connect();
   try {
@@ -304,17 +304,12 @@ app.post('/motos/vender', auth, async (req, res) => {
     if (moto.status!=='DISPONIVEL') throw new Error('Moto indisponível');
     let rep = moto.repasse;
     if (isRepasseObrigatorio(filial_venda)) { const r=getRepasse(moto.modelo); if (typeof r!=='number') throw new Error(`Repasse não configurado: ${moto.modelo}`); rep=r; }
-    // Busca comissão do banco
+    // Comissão provisória (sobre valor líquido) — recalculada na aprovação com entrega/emplacamento definitivos
     let comissao = 30;
     try {
       const comRows = await client.query('SELECT * FROM comissoes WHERE modelo ILIKE $1 LIMIT 1', [moto.modelo]);
-      if (comRows.rows[0]) {
-        const r = comRows.rows[0]; const v = Number(valor||0);
-        if (v >= r.v100) comissao = 100;
-        else if (v >= r.v50) comissao = 50;
-        else if (v >= r.v30) comissao = 30;
-        else comissao = 30;
-      }
+      const valorLiquido = calcularValorLiquido({ valor, brinde, gasolina, entrega_valor:0, emplacamento:0 });
+      comissao = tierComissao(comRows.rows[0], valorLiquido);
     } catch(e) { comissao = calcularComissao(moto.modelo, valor); }
     let cliId = cliente_id||null;
     if (!cliId) {
@@ -334,8 +329,8 @@ app.post('/motos/vender', auth, async (req, res) => {
       if (!jaTem.rows[0]) await client.query('INSERT INTO cliente_motos(cliente_id,chassi,modelo,cor,ano) VALUES($1,$2,$3,$4,$5)',
         [cliId, moto.chassi, moto.modelo, moto.cor, moto.ano_moto]);
     }
-    const p = await client.query(`INSERT INTO vendas_motos_pendentes(moto_id,modelo,cor,chassi,filial_origem,filial_venda,nome_cliente,cpf,numero_cliente,valor,forma_pagamento,brinde,gasolina,como_chegou,local_retirada,filial_retirada,santander,cnpj_empresa,valor_compra,repasse,comissao_valor,cliente_id,data_venda,emplacamento) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24) RETURNING id`,
-      [moto.id,moto.modelo,moto.cor,moto.chassi,moto.filial,filial_venda,nome_cliente,cpf||null,numero_cliente||null,Number(valor),forma_pagamento||null,brinde?1:0,gasolina?Number(gasolina):null,como_chegou||null,local_retirada||null,filial_retirada||null,moto.santander,moto.cnpj_empresa,moto.valor_compra,rep,comissao,cliId,data_venda||null,emplacamento?1:0]);
+    const p = await client.query(`INSERT INTO vendas_motos_pendentes(moto_id,modelo,cor,chassi,filial_origem,filial_venda,nome_cliente,cpf,numero_cliente,valor,forma_pagamento,brinde,gasolina,como_chegou,local_retirada,filial_retirada,santander,cnpj_empresa,valor_compra,repasse,comissao_valor,cliente_id,data_venda,emplacamento,entrega_km) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25) RETURNING id`,
+      [moto.id,moto.modelo,moto.cor,moto.chassi,moto.filial,filial_venda,nome_cliente,cpf||null,numero_cliente||null,Number(valor),forma_pagamento||null,brinde?1:0,gasolina?Number(gasolina):null,como_chegou||null,local_retirada||null,filial_retirada||null,moto.santander,moto.cnpj_empresa,moto.valor_compra,rep,comissao,cliId,data_venda||null,emplacamento?1:0,entrega_km?Number(entrega_km):null]);
     await client.query("UPDATE motos SET status='PENDENTE_APROVACAO' WHERE id=$1", [moto.id]);
     await client.query('COMMIT');
     res.json({ id:p.rows[0].id });
@@ -347,6 +342,7 @@ app.get('/pendentes', auth, adminOnly, async (_, res) => {
   res.json(await db.q("SELECT * FROM vendas_motos_pendentes WHERE status='PENDENTE' ORDER BY created_at DESC"));
 });
 app.post('/pendentes/:id/aprovar', auth, adminOnly, async (req, res) => {
+  const { entrega_valor, emplacamento } = req.body;
   const client = await db.connect();
   try {
     await client.query('BEGIN');
@@ -354,10 +350,15 @@ app.post('/pendentes/:id/aprovar', auth, adminOnly, async (req, res) => {
     if (!p||p.status!=='PENDENTE') throw new Error('Pendência não encontrada');
     let rep = p.repasse;
     if (isRepasseObrigatorio(p.filial_venda)) { const r=getRepasse(p.modelo); if (typeof r!=='number') throw new Error('Repasse não configurado'); rep=r; }
-    await client.query(`INSERT INTO vendas_motos(moto_id,modelo,cor,chassi,filial_origem,filial_venda,nome_cliente,cpf,numero_cliente,valor,forma_pagamento,brinde,gasolina,como_chegou,local_retirada,filial_retirada,santander,cnpj_empresa,valor_compra,repasse,comissao_valor,data_venda,emplacamento) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23)`,
-      [p.moto_id,p.modelo,p.cor,p.chassi,p.filial_origem,p.filial_venda,p.nome_cliente,p.cpf,p.numero_cliente,p.valor,p.forma_pagamento,p.brinde,p.gasolina,p.como_chegou,p.local_retirada,p.filial_retirada,p.santander,p.cnpj_empresa,p.valor_compra,rep,p.comissao_valor,
+    const entregaValor = entrega_valor!=null ? Number(entrega_valor) : Number(p.entrega_valor||0);
+    const emplacamentoValor = emplacamento!=null ? Number(emplacamento) : Number(p.emplacamento||0);
+    const comRows = await client.query('SELECT * FROM comissoes WHERE modelo ILIKE $1 LIMIT 1', [p.modelo]);
+    const valorLiquido = calcularValorLiquido({ valor:p.valor, brinde:p.brinde, gasolina:p.gasolina, entrega_valor:entregaValor, emplacamento:emplacamentoValor });
+    const comissaoFinal = tierComissao(comRows.rows[0], valorLiquido);
+    await client.query(`INSERT INTO vendas_motos(moto_id,modelo,cor,chassi,filial_origem,filial_venda,nome_cliente,cpf,numero_cliente,valor,forma_pagamento,brinde,gasolina,como_chegou,local_retirada,filial_retirada,santander,cnpj_empresa,valor_compra,repasse,comissao_valor,data_venda,emplacamento,entrega_km,entrega_valor) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25)`,
+      [p.moto_id,p.modelo,p.cor,p.chassi,p.filial_origem,p.filial_venda,p.nome_cliente,p.cpf,p.numero_cliente,p.valor,p.forma_pagamento,p.brinde,p.gasolina,p.como_chegou,p.local_retirada,p.filial_retirada,p.santander,p.cnpj_empresa,p.valor_compra,rep,comissaoFinal,
        p.data_venda||new Date().toISOString().slice(0,10), // ← USA DATA DA VENDA, não NOW()
-       p.emplacamento||0]);
+       emplacamentoValor,p.entrega_km,entregaValor]);
     if (p.brinde) {
       const cap = await client.query("SELECT * FROM pecas WHERE nome ILIKE '%CAPACETE%' AND cidade=$1 AND estoque>0 LIMIT 1", [p.filial_venda]);
       if (!cap.rows[0]) throw new Error('Sem capacete em estoque');
@@ -412,12 +413,17 @@ app.get('/vendas-motos', auth, adminOnly, async (_, res) => {
 });
 app.put('/vendas-motos/:id', auth, adminOnly, async (req, res) => {
   try {
-    const { modelo,cor,chassi,filial_venda,filial_origem,nome_cliente,numero_cliente,valor,valor_compra,repasse,forma_pagamento,como_chegou,brinde,gasolina,santander,cnpj_empresa,comissao_valor,rp,rr,emplacamento,data_venda } = req.body;
+    const { modelo,cor,chassi,filial_venda,filial_origem,nome_cliente,numero_cliente,valor,valor_compra,repasse,forma_pagamento,como_chegou,brinde,gasolina,santander,cnpj_empresa,rp,rr,emplacamento,entrega_valor,data_venda } = req.body;
     const r = await db.one(
-      `UPDATE vendas_motos SET modelo=COALESCE($1,modelo),cor=COALESCE($2,cor),chassi=COALESCE($3,chassi),filial_venda=COALESCE($4,filial_venda),filial_origem=COALESCE($5,filial_origem),nome_cliente=COALESCE($6,nome_cliente),numero_cliente=COALESCE($7,numero_cliente),valor=COALESCE($8,valor),valor_compra=COALESCE($9,valor_compra),repasse=COALESCE($10,repasse),forma_pagamento=COALESCE($11,forma_pagamento),como_chegou=COALESCE($12,como_chegou),brinde=COALESCE($13,brinde),gasolina=COALESCE($14,gasolina),santander=COALESCE($15,santander),cnpj_empresa=COALESCE($16,cnpj_empresa),comissao_valor=COALESCE($17,comissao_valor),rp=COALESCE($18,rp),rr=COALESCE($19,rr),emplacamento=COALESCE($20,emplacamento),data_venda=COALESCE($21,data_venda) WHERE id=$22 RETURNING *`,
-      [modelo||null,cor||null,chassi||null,filial_venda||null,filial_origem||null,nome_cliente||null,numero_cliente||null,valor!=null?Number(valor):null,valor_compra!=null?Number(valor_compra):null,repasse!=null?Number(repasse):null,forma_pagamento||null,como_chegou||null,brinde!=null?brinde?1:0:null,gasolina!=null?Number(gasolina):null,santander!=null?santander?1:0:null,cnpj_empresa||null,comissao_valor!=null?Number(comissao_valor):null,rp!=null?rp?1:0:null,rr!=null?rr?1:0:null,emplacamento!=null?Number(emplacamento):null,data_venda||null,req.params.id]
+      `UPDATE vendas_motos SET modelo=COALESCE($1,modelo),cor=COALESCE($2,cor),chassi=COALESCE($3,chassi),filial_venda=COALESCE($4,filial_venda),filial_origem=COALESCE($5,filial_origem),nome_cliente=COALESCE($6,nome_cliente),numero_cliente=COALESCE($7,numero_cliente),valor=COALESCE($8,valor),valor_compra=COALESCE($9,valor_compra),repasse=COALESCE($10,repasse),forma_pagamento=COALESCE($11,forma_pagamento),como_chegou=COALESCE($12,como_chegou),brinde=COALESCE($13,brinde),gasolina=COALESCE($14,gasolina),santander=COALESCE($15,santander),cnpj_empresa=COALESCE($16,cnpj_empresa),rp=COALESCE($17,rp),rr=COALESCE($18,rr),emplacamento=COALESCE($19,emplacamento),entrega_valor=COALESCE($20,entrega_valor),data_venda=COALESCE($21,data_venda) WHERE id=$22 RETURNING *`,
+      [modelo||null,cor||null,chassi||null,filial_venda||null,filial_origem||null,nome_cliente||null,numero_cliente||null,valor!=null?Number(valor):null,valor_compra!=null?Number(valor_compra):null,repasse!=null?Number(repasse):null,forma_pagamento||null,como_chegou||null,brinde!=null?brinde?1:0:null,gasolina!=null?Number(gasolina):null,santander!=null?santander?1:0:null,cnpj_empresa||null,rp!=null?rp?1:0:null,rr!=null?rr?1:0:null,emplacamento!=null?Number(emplacamento):null,entrega_valor!=null?Number(entrega_valor):null,data_venda||null,req.params.id]
     );
-    res.json(r);
+    // Comissão sempre recalculada sobre o valor líquido, nunca editável direto
+    const comRows = await db.q('SELECT * FROM comissoes WHERE modelo ILIKE $1 LIMIT 1', [r.modelo]);
+    const valorLiquido = calcularValorLiquido({ valor:r.valor, brinde:r.brinde, gasolina:r.gasolina, entrega_valor:r.entrega_valor, emplacamento:r.emplacamento });
+    const comissaoFinal = tierComissao(comRows[0], valorLiquido);
+    const r2 = await db.one('UPDATE vendas_motos SET comissao_valor=$1 WHERE id=$2 RETURNING *', [comissaoFinal, r.id]);
+    res.json(r2);
   } catch(e) { res.status(500).json({ error: e.message }); }
 });
 app.delete('/vendas-motos/:id', auth, adminOnly, async (req, res) => {
@@ -717,6 +723,12 @@ app.get('/admin/ranking', auth, adminOnly, async (_, res) => {
   await db.run(`CREATE TABLE IF NOT EXISTS log_atividades (id SERIAL PRIMARY KEY, usuario_id INTEGER, username TEXT, acao TEXT NOT NULL, entidade TEXT, entidade_id TEXT, descricao TEXT, created_at TIMESTAMPTZ DEFAULT NOW())`);
   await db.run(`CREATE TABLE IF NOT EXISTS notificacoes (id SERIAL PRIMARY KEY, tipo TEXT NOT NULL, titulo TEXT NOT NULL, mensagem TEXT, filial TEXT, lida INTEGER DEFAULT 0, created_at TIMESTAMPTZ DEFAULT NOW())`);
   await db.run(`CREATE TABLE IF NOT EXISTS historico_precos (id SERIAL PRIMARY KEY, moto_id INTEGER NOT NULL, chassi TEXT, modelo TEXT, campo TEXT NOT NULL, valor_anterior REAL, valor_novo REAL, alterado_por TEXT, created_at TIMESTAMPTZ DEFAULT NOW())`);
+  await db.run(`ALTER TABLE vendas_motos_pendentes ADD COLUMN IF NOT EXISTS entrega_km REAL`);
+  await db.run(`ALTER TABLE vendas_motos_pendentes ADD COLUMN IF NOT EXISTS entrega_valor REAL NOT NULL DEFAULT 0`);
+  await db.run(`ALTER TABLE vendas_motos ADD COLUMN IF NOT EXISTS entrega_km REAL`);
+  await db.run(`ALTER TABLE vendas_motos ADD COLUMN IF NOT EXISTS entrega_valor REAL NOT NULL DEFAULT 0`);
+  await db.run(`ALTER TABLE vendas_motos_pendentes ALTER COLUMN emplacamento TYPE REAL USING emplacamento::real`);
+  await db.run(`ALTER TABLE vendas_motos ALTER COLUMN emplacamento TYPE REAL USING emplacamento::real`);
 } catch(e) {} })();
 
 const CHECKLIST_PADRAO = ['Óleo do motor','Filtro de óleo','Filtro de ar','Vela de ignição','Corrente e coroa','Pneu dianteiro','Pneu traseiro','Freio dianteiro','Freio traseiro','Fluido de freio','Suspensão dianteira','Suspensão traseira','Farol e lanternas','Buzina','Espelhos retrovisores','Cabo de acelerador','Cabo de embreagem','Bateria','Nível de combustível','Documentação'];

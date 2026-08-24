@@ -117,6 +117,30 @@ export function isRepasseObrig(f) {
   return FILIAIS_REPASSE.includes(String(f||'').toUpperCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').trim());
 }
 export function getRepasse(m) { return REPASSE[normKey(m)]; }
+
+export const CUSTO_CAPACETE = 145;
+export function calcularValorLiquido({ valor, brinde, gasolina, entrega_valor, emplacamento }) {
+  return Number(valor||0)
+    - (brinde ? CUSTO_CAPACETE : 0)
+    - Number(gasolina||0)
+    - Number(entrega_valor||0)
+    - Number(emplacamento||0);
+}
+export function tierComissao(comissaoRow, valorLiquido) {
+  if (!comissaoRow) return 30;
+  const v = Number(valorLiquido||0);
+  if (v >= comissaoRow.v100) return 100;
+  if (v >= comissaoRow.v50)  return 50;
+  if (v >= comissaoRow.v30)  return 30;
+  return 30;
+}
+export function findComissaoRow(comissoes, modelo) {
+  if (!modelo) return null;
+  const m = String(modelo).toUpperCase().trim();
+  return comissoes.find(c => String(c.modelo||'').toUpperCase().trim() === m)
+    || comissoes.find(c => m.includes(String(c.modelo||'').toUpperCase().trim()) || String(c.modelo||'').toUpperCase().trim().includes(m))
+    || null;
+}
 export function getValorCompra(modelo, santander) {
   const cfg = MODELOS_MOTOS.find(m => m.modelo === modelo);
   if (!cfg) return '';
