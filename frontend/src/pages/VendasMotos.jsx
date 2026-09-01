@@ -295,7 +295,12 @@ export default function VendasMotos() {
       case 'brinde':      return v.brinde ? <span className="badge b-grn">SIM</span> : '-';
       case 'rp':          return v.rp ? <span className="badge b-blu">SIM</span> : '-';
       case 'rr':          return v.rr ? <span className="badge b-blu">SIM</span> : '-';
-      case 'comissao':    return v.comissao_valor > 0 ? formatBRL(v.comissao_valor) : '-';
+      case 'comissao': {
+        const semFaixa = !findComissaoRow(comissoes, v.modelo);
+        return <span title={semFaixa?`"${v.modelo}" sem faixa de comissão cadastrada`:undefined} style={semFaixa?{color:'var(--red)'}:undefined}>
+          {v.comissao_valor > 0 ? formatBRL(v.comissao_valor) : '-'}{semFaixa?' ⚠️':''}
+        </span>;
+      }
       case 'comissao_antiga': {
         const antiga = tierComissao(findComissaoRow(comissoes, v.modelo), v.valor);
         return <span style={{color:'var(--tx3)'}}>{formatBRL(antiga)}</span>;
@@ -680,6 +685,9 @@ export default function VendasMotos() {
               <div className="field"><label>Comissão (calculada)</label>
                 <div className="inp" style={{display:'flex',alignItems:'center',fontWeight:600,color:'var(--grn)'}}>{formatBRL(comissaoCalculada)}</div>
                 <div style={{fontSize:11,marginTop:4,color:'var(--tx3)'}}>Sistema antigo (valor bruto): {formatBRL(comissaoAntigaCalculada)}</div>
+                {!findComissaoRow(comissoes, ef.modelo) && (
+                  <div style={{fontSize:11,marginTop:4,color:'var(--red)'}}>⚠️ "{ef.modelo}" sem faixa cadastrada — usando padrão fixo R$30. Cadastre em Admin → Comissões.</div>
+                )}
               </div>
             </div>
             <div className="g2">

@@ -83,6 +83,11 @@ export default function Pendentes() {
                     <span><span style={{color:'var(--tx3)'}}>Sistema antigo (valor bruto): </span><b style={{color:'var(--tx2)'}}>{formatBRL(comissaoAntiga(p))}</b></span>
                     <span><span style={{color:'var(--tx3)'}}>Sistema novo (valor líquido): </span><b style={{color:'var(--grn)'}}>{formatBRL(comissaoPrevista(p))}</b></span>
                   </div>
+                  {!findComissaoRow(comissoes, p.modelo) && (
+                    <div style={{marginTop:6,fontSize:12,color:'var(--red)'}}>
+                      ⚠️ "{p.modelo}" não tem faixa de comissão cadastrada — usando padrão fixo R$30, ignorando o valor. Cadastre o modelo em Admin → Comissões.
+                    </div>
+                  )}
                 </div>
                 <div style={{display:'flex',gap:8,flexShrink:0}}>
                   <button className="btn btn-s" onClick={()=>aprovar(p.id)}>✅ Aprovar</button>
