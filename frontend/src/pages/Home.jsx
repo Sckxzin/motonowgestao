@@ -147,7 +147,7 @@ export default function Home() {
   async function venderMoto() {
     if (!vf.clienteNome || !vf.valor || !vf.filialVenda || !vf.numero) { show('Preencha os campos obrigatórios', 'err'); return; }
     try {
-      await api.post('/motos/vender', { moto_id:motoVenda.id, nome_cliente:vf.clienteNome, cpf:vf.cpf||null, numero_cliente:vf.numero, valor:Number(vf.valor), forma_pagamento:vf.pagamento||null, brinde:!!vf.brinde, gasolina:vf.gasolina?Number(vf.gasolina):null, como_chegou:vf.chegou||null, filial_venda:vf.filialVenda, local_retirada:vf.localRet||null, filial_retirada:vf.localRet==='LOJA'?vf.lojaRet:null, emplacamento:!!vf.emplacamento });
+      await api.post('/motos/vender', { moto_id:motoVenda.id, nome_cliente:vf.clienteNome, cpf:vf.cpf||null, numero_cliente:vf.numero, valor:Number(vf.valor), forma_pagamento:vf.pagamento||null, brinde:!!vf.brinde, gasolina:vf.gasolina?Number(vf.gasolina):null, como_chegou:vf.chegou||null, filial_venda:vf.filialVenda, local_retirada:vf.localRet||null, filial_retirada:vf.localRet==='LOJA'?vf.lojaRet:null, emplacamento:!!vf.emplacamento, entrega_km:vf.localRet==='ENTREGA'&&vf.km?Number(vf.km):null });
       setMotoVenda(null); show('Solicitação enviada para aprovação!'); loadMotos();
     } catch (e) { show(String(e), 'err'); }
   }
@@ -388,7 +388,7 @@ export default function Home() {
                   <td><StatusBadge status={m.status} negociadoPor={m.negociacao_por} usuarios={usuarios} /></td>
                   <td><div style={{display:'flex',gap:5,flexWrap:'wrap'}}>
                     {m.status==='DISPONIVEL' && <>
-                      <button className="ab red" onClick={()=>{setMotoVenda(m);setVf({clienteNome:'',cpf:'',valor:'',numero:'',gasolina:'',pagamento:'',chegou:'',filialVenda:'',localRet:'',lojaRet:'',brinde:false,emplacamento:false});setClienteBuscado(null);}}>Vender</button>
+                      <button className="ab red" onClick={()=>{setMotoVenda(m);setVf({clienteNome:'',cpf:'',valor:'',numero:'',gasolina:'',pagamento:'',chegou:'',filialVenda:'',localRet:'',lojaRet:'',km:'',brinde:false,emplacamento:false});setClienteBuscado(null);}}>Vender</button>
                       <button className="ab" onClick={()=>alterarStatus(m.id,'NEGOCIACAO')}>🤝</button>
                     </>}
                     {m.status==='NEGOCIACAO' && (isDir(user)||m.negociacao_por===user.id) && <button className="ab" onClick={()=>alterarStatus(m.id,'DISPONIVEL')}>↩</button>}
@@ -471,6 +471,9 @@ export default function Home() {
               <option value="">Selecione</option>
               {LOJAS_RETIRADA.map(f=><option key={f}>{f}</option>)}
             </select>
+          </div>}
+          {vf.localRet==='ENTREGA' && <div className="field"><label>KM estimado da entrega</label>
+            <input className="inp" type="number" placeholder="Ex: 25" value={vf.km||''} onChange={e=>setVf({...vf,km:e.target.value})} />
           </div>}
           <div style={{display:'flex',gap:20,marginBottom:16,flexWrap:'wrap'}}>
             <label className="ck"><input type="checkbox" checked={!!vf.brinde} onChange={e=>setVf({...vf,brinde:e.target.checked})} /> Capacete de brinde</label>

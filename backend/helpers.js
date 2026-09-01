@@ -75,4 +75,23 @@ function calcularComissao(modelo, valor) {
   if (v >= r.v30)  return 30;
   return 30;
 }
-module.exports = { FILIAIS, isRepasseObrigatorio, getRepasse, calcularComissao };
+// ═══════════════════════════════════════════
+// COMISSÃO SOBRE VALOR LÍQUIDO
+// ═══════════════════════════════════════════
+const CUSTO_CAPACETE = 145;
+function calcularValorLiquido({ valor, brinde, gasolina, entrega_valor, emplacamento }) {
+  return Number(valor||0)
+    - (brinde ? CUSTO_CAPACETE : 0)
+    - Number(gasolina||0)
+    - Number(entrega_valor||0)
+    - Number(emplacamento||0);
+}
+function tierComissao(comissaoRow, valorLiquido) {
+  if (!comissaoRow) return 30;
+  const v = Number(valorLiquido||0);
+  if (v >= comissaoRow.v100) return 100;
+  if (v >= comissaoRow.v50)  return 50;
+  if (v >= comissaoRow.v30)  return 30;
+  return 30;
+}
+module.exports = { FILIAIS, isRepasseObrigatorio, getRepasse, calcularComissao, calcularValorLiquido, tierComissao, CUSTO_CAPACETE };

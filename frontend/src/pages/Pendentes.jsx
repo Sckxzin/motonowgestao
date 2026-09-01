@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import Topbar from '../components/Topbar';
 import useToast from '../hooks/useToast';
 import api from '../api';
-import { getUser, formatBRL, fmtDateTime } from '../utils';
+import { getUser, formatBRL, fmtDateTime, calcularValorLiquido, tierComissao, findComissaoRow } from '../utils';
 
 export default function Pendentes() {
   const nav = useNavigate(); const user = getUser();
@@ -12,14 +12,36 @@ export default function Pendentes() {
   const [loading, setLoading] = useState(true);
   const [recusando, setRecusando] = useState(null);
   const [motivo, setMotivo] = useState('');
+  const [comissoes, setComissoes] = useState([]);
+  const [edits, setEdits] = useState({}); // { [pendenciaId]: { entrega_valor, emplacamento } }
 
   useEffect(() => {
     if (!user) nav('/');
     api.get('/pendentes').then(r=>{ setLista(r.data); setLoading(false); }).catch(e=>{ show(String(e),'err'); setLoading(false); });
+    api.get('/comissoes').then(r=>setComissoes(r.data)).catch(()=>{});
   }, []);
 
+  function setEdit(id, campo, valor) {
+    setEdits(prev => ({ ...prev, [id]: { ...prev[id], [campo]: valor } }));
+  }
+  function comissaoPrevista(p) {
+    const ed = edits[p.id] || {};
+    const entrega_valor = ed.entrega_valor!=null ? ed.entrega_valor : (p.entrega_valor||0);
+    const emplacamento = ed.emplacamento!=null ? ed.emplacamento : (p.emplacamento||0);
+    const liquido = calcularValorLiquido({ valor:p.valor, brinde:p.brinde, gasolina:p.gasolina, entrega_valor, emplacamento });
+    return tierComissao(findComissaoRow(comissoes, p.modelo), liquido);
+  }
+  // Sistema antigo: comparava direto o valor bruto da venda, sem descontar nada
+  function comissaoAntiga(p) {
+    return tierComissao(findComissaoRow(comissoes, p.modelo), p.valor);
+  }
+
   async function aprovar(id) {
-    try { await api.post(`/pendentes/${id}/aprovar`,{}); setLista(p=>p.filter(x=>x.id!==id)); show('Venda aprovada!'); }
+    const ed = edits[id] || {};
+    try {
+      await api.post(`/pendentes/${id}/aprovar`, { entrega_valor:Number(ed.entrega_valor||0), emplacamento:Number(ed.emplacamento||0) });
+      setLista(p=>p.filter(x=>x.id!==id)); show('Venda aprovada!');
+    }
     catch(e){ show(String(e),'err'); }
   }
 
@@ -45,9 +67,21 @@ export default function Pendentes() {
                     <span style={{fontSize:12,color:'var(--tx3)'}}>{fmtDateTime(p.created_at)}</span>
                   </div>
                   <div className="g2" style={{gap:8}}>
-                    {[['Moto',`${p.modelo} · ${p.cor}`],['Chassi',p.chassi],['Cliente',p.nome_cliente],['Valor',formatBRL(p.valor)],['Filial venda',p.filial_venda],['Pagamento',p.forma_pagamento||'—'],['Gasolina',p.gasolina?formatBRL(p.gasolina):'—'],['Brinde',p.brinde?'Sim':'Não'],['Como chegou',p.como_chegou||'—'],['WhatsApp',p.numero_cliente||'—']].map(([l,v])=>(
+                    {[['Moto',`${p.modelo} · ${p.cor}`],['Chassi',p.chassi],['Cliente',p.nome_cliente],['Valor',formatBRL(p.valor)],['Filial venda',p.filial_venda],['Pagamento',p.forma_pagamento||'—'],['Gasolina',p.gasolina?formatBRL(p.gasolina):'—'],['Brinde',p.brinde?'Sim':'Não'],['Como chegou',p.como_chegou||'—'],['WhatsApp',p.numero_cliente||'—'],['Retirada',p.local_retirada==='ENTREGA'?`Entrega${p.entrega_km?` (~${p.entrega_km}km)`:''}`:(p.local_retirada||'—')]].map(([l,v])=>(
                       <div key={l}><span style={{fontSize:11,color:'var(--tx3)'}}>{l}</span><div style={{fontSize:13,fontWeight:500,marginTop:2}}>{v}</div></div>
                     ))}
+                  </div>
+                  <div className="g2" style={{gap:8,marginTop:12,paddingTop:12,borderTop:'1px dashed var(--bd)'}}>
+                    <div className="field" style={{margin:0}}><label>Entrega (R$)</label>
+                      <input className="inp" type="number" step="0.01" placeholder="0,00" value={edits[p.id]?.entrega_valor??''} onChange={e=>setEdit(p.id,'entrega_valor',e.target.value)} />
+                    </div>
+                    <div className="field" style={{margin:0}}><label>Emplacamento (R$)</label>
+                      <input className="inp" type="number" step="0.01" placeholder="0,00" value={edits[p.id]?.emplacamento??''} onChange={e=>setEdit(p.id,'emplacamento',e.target.value)} />
+                    </div>
+                  </div>
+                  <div style={{marginTop:10,fontSize:13,display:'flex',gap:16,flexWrap:'wrap'}}>
+                    <span><span style={{color:'var(--tx3)'}}>Sistema antigo (valor bruto): </span><b style={{color:'var(--tx2)'}}>{formatBRL(comissaoAntiga(p))}</b></span>
+                    <span><span style={{color:'var(--tx3)'}}>Sistema novo (valor líquido): </span><b style={{color:'var(--grn)'}}>{formatBRL(comissaoPrevista(p))}</b></span>
                   </div>
                 </div>
                 <div style={{display:'flex',gap:8,flexShrink:0}}>
