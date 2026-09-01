@@ -30,6 +30,7 @@ const TODAS_COLUNAS = [
   { key:'rp',            label:'RP',            fixed:false, w:50  },
   { key:'rr',            label:'RR',            fixed:false, w:50  },
   { key:'comissao',      label:'Comissão',      fixed:false, w:90  },
+  { key:'comissao_antiga', label:'Comissão (sistema antigo)', fixed:false, w:130 },
   { key:'como_chegou',   label:'Como chegou',   fixed:false, w:110 },
   { key:'emplacamento',  label:'Emplacamento',  fixed:false, w:100 },
   { key:'acoes',         label:'Ações',         fixed:true,  w:90  },
@@ -154,6 +155,10 @@ export default function VendasMotos() {
     const liquido = calcularValorLiquido({ valor:ef.valor, brinde:ef.brinde, gasolina:ef.gasolina, entrega_valor:ef.entrega_valor, emplacamento:ef.emplacamento });
     return tierComissao(findComissaoRow(comissoes, ef.modelo), liquido);
   }, [edit, ef.valor, ef.brinde, ef.gasolina, ef.entrega_valor, ef.emplacamento, ef.modelo, comissoes]);
+  const comissaoAntigaCalculada = useMemo(() => {
+    if (!edit) return 0;
+    return tierComissao(findComissaoRow(comissoes, ef.modelo), ef.valor);
+  }, [edit, ef.valor, ef.modelo, comissoes]);
 
   // Relatório de verificação pós-exclusão de duplicados
   const [verificacao, setVerificacao] = useState(null); // array de {chassi, modelo, status, filial} | null
@@ -230,7 +235,7 @@ export default function VendasMotos() {
 
   // Totais
   const totais = useMemo(() => {
-    let fatE=0, fatM=0, repE=0, repM=0, liqE=0, liqM=0, bruto=0, comissao=0;
+    let fatE=0, fatM=0, repE=0, repM=0, liqE=0, liqM=0, bruto=0, comissao=0, comissaoAntiga=0;
     filtered.forEach(v => {
       const e = getEmpresa(v) === 'EMENEZES';
       const val = Number(v.valor||0);
@@ -246,9 +251,10 @@ export default function VendasMotos() {
         bruto += val - compra;
       }
       comissao += Number(v.comissao_valor||0);
+      comissaoAntiga += tierComissao(findComissaoRow(comissoes, v.modelo), v.valor);
     });
-    return { fatE, fatM, repE, repM, liqE, liqM, bruto, comissao };
-  }, [filtered]);
+    return { fatE, fatM, repE, repM, liqE, liqM, bruto, comissao, comissaoAntiga };
+  }, [filtered, comissoes]);
 
   // Colunas ativas ordenadas
   const colsAtivas = useMemo(() => {
@@ -290,6 +296,10 @@ export default function VendasMotos() {
       case 'rp':          return v.rp ? <span className="badge b-blu">SIM</span> : '-';
       case 'rr':          return v.rr ? <span className="badge b-blu">SIM</span> : '-';
       case 'comissao':    return v.comissao_valor > 0 ? formatBRL(v.comissao_valor) : '-';
+      case 'comissao_antiga': {
+        const antiga = tierComissao(findComissaoRow(comissoes, v.modelo), v.valor);
+        return <span style={{color:'var(--tx3)'}}>{formatBRL(antiga)}</span>;
+      }
       case 'como_chegou': return v.como_chegou || '-';
       case 'emplacamento': {
         const emp = Number(v.emplacamento||0);
@@ -336,6 +346,7 @@ export default function VendasMotos() {
         case 'gasolina':   return Number(v.gasolina||0).toFixed(2);
         case 'entrega':    return Number(v.entrega_valor||0).toFixed(2);
         case 'comissao':   return Number(v.comissao_valor||0).toFixed(2);
+        case 'comissao_antiga': return Number(tierComissao(findComissaoRow(comissoes, v.modelo), v.valor)).toFixed(2);
         case 'empresa':    return getEmpresa(v);
         case 'brinde':     return v.brinde ? 'SIM' : 'NÃO';
         case 'rp':         return v.rp ? 'SIM' : 'NÃO';
@@ -573,6 +584,11 @@ export default function VendasMotos() {
           <div className="stat blu"><div className="sv" style={{fontSize:15}}>{formatBRL(totais.fatM)}</div><div className="sl">Fat. MotoNow</div></div>
           <div className="stat" style={{background:'rgba(249,115,22,.1)',border:'1px solid rgba(249,115,22,.25)'}}><div className="sv" style={{fontSize:15,color:'#f97316'}}>{formatBRL(totais.bruto)}</div><div className="sl" style={{color:'#f97316'}}>Bruto</div></div>
           <div className="stat" style={{background:'rgba(168,85,247,.1)',border:'1px solid rgba(168,85,247,.25)'}}><div className="sv" style={{fontSize:15,color:'#a855f7'}}>{formatBRL(totais.comissao)}</div><div className="sl" style={{color:'#a855f7'}}>Comissões</div></div>
+          <div className="stat"><div className="sv" style={{fontSize:15,color:'var(--tx3)'}}>{formatBRL(totais.comissaoAntiga)}</div><div className="sl">Comissões (sistema antigo)</div></div>
+          <div className="stat" style={{background: totais.comissao-totais.comissaoAntiga>=0 ? 'rgba(46,204,113,.1)' : 'rgba(230,57,70,.1)', border:`1px solid ${totais.comissao-totais.comissaoAntiga>=0?'var(--grnbd)':'var(--redbd)'}`}}>
+            <div className="sv" style={{fontSize:15,color: totais.comissao-totais.comissaoAntiga>=0 ? 'var(--grn)' : 'var(--red)'}}>{totais.comissao-totais.comissaoAntiga>=0?'+':''}{formatBRL(totais.comissao-totais.comissaoAntiga)}</div>
+            <div className="sl">Diferença (novo − antigo)</div>
+          </div>
           <div className="stat"><div className="sv">{filtered.length}</div><div className="sl">Motos</div></div>
           <div className="stat red"><div className="sv" style={{fontSize:15}}>{formatBRL(totais.repE)}</div><div className="sl">A repassar Emenezes</div></div>
           <div className="stat red"><div className="sv" style={{fontSize:15}}>{formatBRL(totais.repM)}</div><div className="sl">A repassar MotoNow</div></div>
@@ -663,6 +679,7 @@ export default function VendasMotos() {
               <div className="field"><label>Repasse (R$)</label><input className="inp" type="number" step="0.01" value={ef.repasse} onChange={e=>setEf({...ef,repasse:e.target.value})} /></div>
               <div className="field"><label>Comissão (calculada)</label>
                 <div className="inp" style={{display:'flex',alignItems:'center',fontWeight:600,color:'var(--grn)'}}>{formatBRL(comissaoCalculada)}</div>
+                <div style={{fontSize:11,marginTop:4,color:'var(--tx3)'}}>Sistema antigo (valor bruto): {formatBRL(comissaoAntigaCalculada)}</div>
               </div>
             </div>
             <div className="g2">

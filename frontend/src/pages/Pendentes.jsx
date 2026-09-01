@@ -31,6 +31,10 @@ export default function Pendentes() {
     const liquido = calcularValorLiquido({ valor:p.valor, brinde:p.brinde, gasolina:p.gasolina, entrega_valor, emplacamento });
     return tierComissao(findComissaoRow(comissoes, p.modelo), liquido);
   }
+  // Sistema antigo: comparava direto o valor bruto da venda, sem descontar nada
+  function comissaoAntiga(p) {
+    return tierComissao(findComissaoRow(comissoes, p.modelo), p.valor);
+  }
 
   async function aprovar(id) {
     const ed = edits[id] || {};
@@ -75,9 +79,9 @@ export default function Pendentes() {
                       <input className="inp" type="number" step="0.01" placeholder="0,00" value={edits[p.id]?.emplacamento??''} onChange={e=>setEdit(p.id,'emplacamento',e.target.value)} />
                     </div>
                   </div>
-                  <div style={{marginTop:10,fontSize:13}}>
-                    <span style={{color:'var(--tx3)'}}>Comissão prevista: </span>
-                    <b style={{color:'var(--grn)'}}>{formatBRL(comissaoPrevista(p))}</b>
+                  <div style={{marginTop:10,fontSize:13,display:'flex',gap:16,flexWrap:'wrap'}}>
+                    <span><span style={{color:'var(--tx3)'}}>Sistema antigo (valor bruto): </span><b style={{color:'var(--tx2)'}}>{formatBRL(comissaoAntiga(p))}</b></span>
+                    <span><span style={{color:'var(--tx3)'}}>Sistema novo (valor líquido): </span><b style={{color:'var(--grn)'}}>{formatBRL(comissaoPrevista(p))}</b></span>
                   </div>
                 </div>
                 <div style={{display:'flex',gap:8,flexShrink:0}}>
