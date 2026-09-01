@@ -260,6 +260,37 @@ app.post('/motos', auth, adminOnly, async (req, res) => {
     [modelo, cor, chassi, filial, santander?1:0, cnpj_empresa||null, ano_moto||null, valor_compra?Number(valor_compra):null, valor_minimo_venda?Number(valor_minimo_venda):null, rep]);
   res.json(r);
 });
+app.post('/motos/lote', auth, adminOnly, async (req, res) => {
+  const { modelo, cor, filial, santander, cnpj_empresa, ano_moto, valor_compra, valor_minimo_venda, repasse, itens } = req.body;
+  if (!modelo||!filial||!Array.isArray(itens)||itens.length===0) return res.status(400).json({ error:'Dados incompletos' });
+  let rep = repasse!=null ? Number(repasse) : null;
+  if (isRepasseObrigatorio(filial)) { const r=getRepasse(modelo); if (typeof r!=='number') return res.status(400).json({ error:`Repasse não configurado: ${modelo}` }); rep=r; }
+  const client = await db.connect();
+  const criadas = [], erros = [];
+  try {
+    await client.query('BEGIN');
+    const vistos = new Set();
+    for (const it of itens) {
+      const chassi = String(it.chassi||'').trim().toUpperCase();
+      const corItem = String(it.cor||cor||'').trim();
+      if (!chassi) { erros.push({ chassi: it.chassi||'(vazio)', motivo:'Chassi vazio' }); continue; }
+      if (vistos.has(chassi)) { erros.push({ chassi, motivo:'Repetido na lista' }); continue; }
+      vistos.add(chassi);
+      if (!corItem) { erros.push({ chassi, motivo:'Cor obrigatória' }); continue; }
+      const ex = await client.query('SELECT id FROM motos WHERE chassi=$1', [chassi]);
+      if (ex.rows[0]) { erros.push({ chassi, motivo:'Já cadastrado' }); continue; }
+      const r = await client.query(
+        'INSERT INTO motos(modelo,cor,chassi,filial,santander,cnpj_empresa,ano_moto,valor_compra,valor_minimo_venda,repasse) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) RETURNING *',
+        [modelo, corItem, chassi, filial, santander?1:0, cnpj_empresa||null, ano_moto||null, valor_compra?Number(valor_compra):null, valor_minimo_venda?Number(valor_minimo_venda):null, rep]
+      );
+      criadas.push(r.rows[0]);
+    }
+    await client.query('COMMIT');
+    await registrarLog(req, 'CADASTRAR_MOTOS_LOTE', 'motos', '', `${criadas.length} moto(s) — ${modelo}`);
+    res.json({ criadas, erros });
+  } catch(e) { await client.query('ROLLBACK'); res.status(400).json({ error:e.message }); }
+  finally { client.release(); }
+});
 app.put('/motos/:id/status', auth, async (req, res) => {
   const { status } = req.body;
   const { id:userId, role } = req.user;
