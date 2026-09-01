@@ -59,6 +59,10 @@ export default function Home() {
   const [cadPf, setCadPf] = useState({ nome:'', preco:'', cidade:'', valor_compra:'', codigo:'', tipo_moto:'' });
   const [modCadM, setModCadM] = useState(false);
   const [cadMf, setCadMf] = useState({ modelo:'', cor:'', chassi:'', ano:'', valorCompra:'', valorMinimoVenda:'', repasse:'', filial:'', cnpj:'', santander:false });
+  const [loteMode, setLoteMode] = useState(false);
+  const [loteChassis, setLoteChassis] = useState('');
+  const [loteResultado, setLoteResultado] = useState(null); // { criadas, erros } | null
+  const [salvandoLote, setSalvandoLote] = useState(false);
 
   const loadPecas = useCallback(async () => {
     setLoadingP(true);
@@ -202,6 +206,27 @@ export default function Home() {
     } catch (e) { show(String(e), 'err'); }
   }
 
+  async function cadastrarMotosLote() {
+    const {modelo,cor,ano,valorCompra,valorMinimoVenda,repasse,filial,cnpj,santander} = cadMf;
+    if (!modelo||!filial||!cnpj) { show('Preencha modelo, filial e CNPJ', 'err'); return; }
+    const itens = loteChassis.split('\n').map(l=>l.trim()).filter(Boolean).map(linha => {
+      const [chassiRaw, corRaw] = linha.split(',').map(s=>s?.trim());
+      return { chassi: chassiRaw, cor: corRaw || undefined };
+    });
+    if (itens.length===0) { show('Cole ao menos um chassi', 'err'); return; }
+    let rep = repasse?Number(repasse):null;
+    if (isRepasseObrig(filial)) { const r=getRepasse(modelo); if (!r) { show('Repasse não configurado para este modelo','err'); return; } rep=r; }
+    setSalvandoLote(true);
+    try {
+      const r = await api.post('/motos/lote', { modelo,cor,filial,santander:!!santander,cnpj_empresa:cnpj,ano_moto:ano?Number(ano):null,valor_compra:valorCompra?Number(valorCompra):null,valor_minimo_venda:valorMinimoVenda?Number(valorMinimoVenda):null,repasse:rep,itens });
+      setLoteResultado(r.data);
+      show(`${r.data.criadas.length} moto(s) cadastrada(s)${r.data.erros.length?`, ${r.data.erros.length} com erro`:''}!`, r.data.erros.length?'err':undefined);
+      if (r.data.erros.length===0) { setModCadM(false); setLoteChassis(''); setCadMf({modelo:'',cor:'',chassi:'',ano:'',valorCompra:'',valorMinimoVenda:'',repasse:'',filial:'',cnpj:'',santander:false}); setLoteMode(false); }
+      loadMotos();
+    } catch (e) { show(String(e), 'err'); }
+    finally { setSalvandoLote(false); }
+  }
+
   if (!user) return null;
 
   const pecasFilt = pecas.filter(p => p.nome.toLowerCase().includes(busca.toLowerCase()));
@@ -319,7 +344,7 @@ export default function Home() {
             <span className="sh-t">Estoque de motos</span>
             <div style={{display:'flex',gap:6}}>
               <button className="btn btn-g btn-sm" onClick={exportarMotosExcel}>📊 Exportar Excel</button>
-              {isDir(user) && <button className="btn btn-p btn-sm" onClick={()=>setModCadM(true)}>+ Cadastrar moto</button>}
+              {isDir(user) && <button className="btn btn-p btn-sm" onClick={()=>{setLoteMode(false);setLoteChassis('');setLoteResultado(null);setModCadM(true);}}>+ Cadastrar moto</button>}
             </div>
           </div>
 
@@ -566,7 +591,10 @@ export default function Home() {
       {/* MODAL CADASTRAR MOTO */}
       {modCadM && <div className="mbg" onClick={()=>setModCadM(false)}>
         <div className="mbox wide" onClick={e=>e.stopPropagation()}>
-          <div className="mhd"><h3>Cadastrar moto</h3><button className="mclose" onClick={()=>setModCadM(false)}>×</button></div>
+          <div className="mhd"><h3>Cadastrar moto{loteMode?'s (em lote)':''}</h3><button className="mclose" onClick={()=>setModCadM(false)}>×</button></div>
+          <label className="ck" style={{marginBottom:12}}>
+            <input type="checkbox" checked={loteMode} onChange={e=>{setLoteMode(e.target.checked);setLoteResultado(null);}} /> Cadastrar várias motos de uma vez (mesmo modelo)
+          </label>
           <div className="field"><label>Modelo *</label>
             <select className="inp" value={cadMf.modelo} onChange={e=>{
               const m=e.target.value; const cfg=MODELOS_MOTOS.find(x=>x.modelo===m);
@@ -579,10 +607,22 @@ export default function Home() {
             </select>
           </div>
           <div className="g2">
-            <div className="field"><label>Cor *</label><input className="inp" value={cadMf.cor} onChange={e=>setCadMf({...cadMf,cor:e.target.value})} /></div>
+            <div className="field"><label>Cor {loteMode?'(padrão)':'*'}</label><input className="inp" value={cadMf.cor} onChange={e=>setCadMf({...cadMf,cor:e.target.value})} /></div>
             <div className="field"><label>Ano *</label><input className="inp" placeholder="2024" value={cadMf.ano} onChange={e=>setCadMf({...cadMf,ano:e.target.value})} /></div>
           </div>
-          <div className="field"><label>Chassi *</label><input className="inp" value={cadMf.chassi} onChange={e=>setCadMf({...cadMf,chassi:e.target.value})} /></div>
+          {loteMode ? (
+            <div className="field">
+              <label>Chassis * (um por linha — opcionalmente <code>CHASSI, COR</code> pra cor diferente da padrão)</label>
+              <textarea className="inp" rows={6} style={{fontFamily:'var(--mono)',fontSize:12}}
+                placeholder={'9C2JC1750P0000001\n9C2JC1750P0000002, PRETA\n9C2JC1750P0000003'}
+                value={loteChassis} onChange={e=>setLoteChassis(e.target.value)} />
+              <div style={{fontSize:11,color:'var(--tx3)',marginTop:4}}>
+                {loteChassis.split('\n').map(l=>l.trim()).filter(Boolean).length} chassi(s) na lista
+              </div>
+            </div>
+          ) : (
+            <div className="field"><label>Chassi *</label><input className="inp" value={cadMf.chassi} onChange={e=>setCadMf({...cadMf,chassi:e.target.value})} /></div>
+          )}
           <div className="g2">
             <div className="field"><label>Valor compra *</label><input className="inp" type="number" value={cadMf.valorCompra} onChange={e=>setCadMf({...cadMf,valorCompra:e.target.value})} /></div>
             <div className="field"><label>Valor mínimo de venda</label><input className="inp" type="number" placeholder="Ex: 15500" value={cadMf.valorMinimoVenda} onChange={e=>setCadMf({...cadMf,valorMinimoVenda:e.target.value})} /></div>
@@ -607,9 +647,25 @@ export default function Home() {
               setCadMf(p=>({...p,santander:s,valorCompra:vc?String(vc):p.valorCompra}));
             }} /> Financiada Santander (EMENEZES)
           </label>
+          {loteResultado && (
+            <div style={{marginBottom:16,padding:12,borderRadius:'var(--r)',background:'var(--s3)',border:'1px solid var(--bd)'}}>
+              <div style={{fontSize:13,fontWeight:600,marginBottom:6}}>
+                ✅ {loteResultado.criadas.length} cadastrada(s){loteResultado.erros.length>0?`, ⚠️ ${loteResultado.erros.length} não cadastrada(s)`:''}
+              </div>
+              {loteResultado.erros.length>0 && (
+                <div style={{fontSize:12,color:'var(--tx2)',display:'flex',flexDirection:'column',gap:2}}>
+                  {loteResultado.erros.map((e,i)=>(
+                    <div key={i}><span style={{fontFamily:'var(--mono)'}}>{e.chassi}</span> — {e.motivo}</div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
           <div className="mfoot">
             <button className="btn btn-g" onClick={()=>setModCadM(false)}>Cancelar</button>
-            <button className="btn btn-p" onClick={cadastrarMoto}>Cadastrar</button>
+            {loteMode
+              ? <button className="btn btn-p" disabled={salvandoLote} onClick={cadastrarMotosLote}>{salvandoLote?'Cadastrando...':'Cadastrar em lote'}</button>
+              : <button className="btn btn-p" onClick={cadastrarMoto}>Cadastrar</button>}
           </div>
         </div>
       </div>}
