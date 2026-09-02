@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import Topbar from '../components/Topbar';
 import useToast from '../hooks/useToast';
 import api from '../api';
-import { getUser, formatBRL, fmtDateTime, calcularValorLiquido, tierComissao, findComissaoRow } from '../utils';
+import { getUser, formatBRL, fmtDateTime, calcularValorLiquido, tierComissao, calcularComissaoComExcedente, findComissaoRow } from '../utils';
 
 export default function Pendentes() {
   const nav = useNavigate(); const user = getUser();
@@ -24,12 +24,14 @@ export default function Pendentes() {
   function setEdit(id, campo, valor) {
     setEdits(prev => ({ ...prev, [id]: { ...prev[id], [campo]: valor } }));
   }
-  function comissaoPrevista(p) {
+  function valorLiquidoPrevisto(p) {
     const ed = edits[p.id] || {};
     const entrega_valor = ed.entrega_valor!=null ? ed.entrega_valor : (p.entrega_valor||0);
     const emplacamento = ed.emplacamento!=null ? ed.emplacamento : (p.emplacamento||0);
-    const liquido = calcularValorLiquido({ valor:p.valor, brinde:p.brinde, gasolina:p.gasolina, entrega_valor, emplacamento });
-    return tierComissao(findComissaoRow(comissoes, p.modelo), liquido);
+    return calcularValorLiquido({ valor:p.valor, brinde:p.brinde, gasolina:p.gasolina, entrega_valor, emplacamento });
+  }
+  function comissaoPrevista(p) {
+    return calcularComissaoComExcedente(findComissaoRow(comissoes, p.modelo), valorLiquidoPrevisto(p));
   }
   // Sistema antigo: comparava direto o valor bruto da venda, sem descontar nada
   function comissaoAntiga(p) {
@@ -80,8 +82,11 @@ export default function Pendentes() {
                     </div>
                   </div>
                   <div style={{marginTop:10,fontSize:13,display:'flex',gap:16,flexWrap:'wrap'}}>
-                    <span><span style={{color:'var(--tx3)'}}>Sistema antigo (valor bruto): </span><b style={{color:'var(--tx2)'}}>{formatBRL(comissaoAntiga(p))}</b></span>
-                    <span><span style={{color:'var(--tx3)'}}>Sistema novo (valor líquido): </span><b style={{color:'var(--grn)'}}>{formatBRL(comissaoPrevista(p))}</b></span>
+                    <span><span style={{color:'var(--tx3)'}}>Valor líquido (venda − descontos): </span><b>{formatBRL(valorLiquidoPrevisto(p))}</b></span>
+                  </div>
+                  <div style={{marginTop:6,fontSize:13,display:'flex',gap:16,flexWrap:'wrap'}}>
+                    <span><span style={{color:'var(--tx3)'}}>Sistema antigo (valor bruto, fixo): </span><b style={{color:'var(--tx2)'}}>{formatBRL(comissaoAntiga(p))}</b></span>
+                    <span><span style={{color:'var(--tx3)'}}>Comissão (valor líquido + excedente): </span><b style={{color:'var(--grn)'}}>{formatBRL(comissaoPrevista(p))}</b></span>
                   </div>
                   {!findComissaoRow(comissoes, p.modelo) && (
                     <div style={{marginTop:6,fontSize:12,color:'var(--red)'}}>

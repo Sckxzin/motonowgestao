@@ -4,7 +4,7 @@ const cors    = require('cors');
 const jwt     = require('jsonwebtoken');
 const bcrypt  = require('bcryptjs');
 const db      = require('./db');
-const { isRepasseObrigatorio, getRepasse, calcularComissao, calcularValorLiquido, tierComissao } = require('./helpers');
+const { isRepasseObrigatorio, getRepasse, calcularComissao, calcularValorLiquido, calcularComissaoComExcedente } = require('./helpers');
 
 const app = express();
 const JWT  = process.env.JWT_SECRET || 'motonow_secret_2024';
@@ -344,7 +344,7 @@ app.post('/motos/vender', auth, async (req, res) => {
     try {
       const comRows = await client.query('SELECT * FROM comissoes WHERE modelo ILIKE $1 LIMIT 1', [moto.modelo]);
       const valorLiquido = calcularValorLiquido({ valor, brinde, gasolina, entrega_valor:0, emplacamento:0 });
-      comissao = tierComissao(comRows.rows[0], valorLiquido);
+      comissao = calcularComissaoComExcedente(comRows.rows[0], valorLiquido);
     } catch(e) { comissao = calcularComissao(moto.modelo, valor); }
     let cliId = cliente_id||null;
     if (!cliId) {
@@ -389,7 +389,7 @@ app.post('/pendentes/:id/aprovar', auth, adminOnly, async (req, res) => {
     const emplacamentoValor = emplacamento!=null ? Number(emplacamento) : Number(p.emplacamento||0);
     const comRows = await client.query('SELECT * FROM comissoes WHERE modelo ILIKE $1 LIMIT 1', [p.modelo]);
     const valorLiquido = calcularValorLiquido({ valor:p.valor, brinde:p.brinde, gasolina:p.gasolina, entrega_valor:entregaValor, emplacamento:emplacamentoValor });
-    const comissaoFinal = tierComissao(comRows.rows[0], valorLiquido);
+    const comissaoFinal = calcularComissaoComExcedente(comRows.rows[0], valorLiquido);
     await client.query(`INSERT INTO vendas_motos(moto_id,modelo,cor,chassi,filial_origem,filial_venda,nome_cliente,cpf,numero_cliente,valor,forma_pagamento,brinde,gasolina,como_chegou,local_retirada,filial_retirada,santander,cnpj_empresa,valor_compra,repasse,comissao_valor,data_venda,emplacamento,entrega_km,entrega_valor) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25)`,
       [p.moto_id,p.modelo,p.cor,p.chassi,p.filial_origem,p.filial_venda,p.nome_cliente,p.cpf,p.numero_cliente,p.valor,p.forma_pagamento,p.brinde,p.gasolina,p.como_chegou,p.local_retirada,p.filial_retirada,p.santander,p.cnpj_empresa,p.valor_compra,rep,comissaoFinal,
        p.data_venda||new Date().toISOString().slice(0,10), // ← USA DATA DA VENDA, não NOW()
@@ -456,7 +456,7 @@ app.put('/vendas-motos/:id', auth, adminOnly, async (req, res) => {
     // Comissão sempre recalculada sobre o valor líquido, nunca editável direto
     const comRows = await db.q('SELECT * FROM comissoes WHERE modelo ILIKE $1 LIMIT 1', [r.modelo]);
     const valorLiquido = calcularValorLiquido({ valor:r.valor, brinde:r.brinde, gasolina:r.gasolina, entrega_valor:r.entrega_valor, emplacamento:r.emplacamento });
-    const comissaoFinal = tierComissao(comRows[0], valorLiquido);
+    const comissaoFinal = calcularComissaoComExcedente(comRows[0], valorLiquido);
     const r2 = await db.one('UPDATE vendas_motos SET comissao_valor=$1 WHERE id=$2 RETURNING *', [comissaoFinal, r.id]);
     res.json(r2);
   } catch(e) { res.status(500).json({ error: e.message }); }
