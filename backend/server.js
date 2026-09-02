@@ -46,6 +46,10 @@ app.post('/login', async (req, res) => {
     const u = await db.one('SELECT * FROM usuarios WHERE username=$1 AND ativo=1', [username]);
     if (!u || !bcrypt.compareSync(password, u.password))
       return res.status(401).json({ error: 'Usuário ou senha inválidos' });
+    if (u.role !== 'DIRETORIA') {
+      const fil = await db.one('SELECT ativa FROM filiais WHERE nome=UPPER(TRIM($1))', [u.cidade]);
+      if (fil && !fil.ativa) return res.status(403).json({ error: 'Filial desativada. Fale com a diretoria.' });
+    }
     const token = jwt.sign({ id:u.id, username:u.username, role:u.role, cidade:u.cidade }, JWT, { expiresIn:'8h' });
     res.json({ token, user:{ id:u.id, username:u.username, role:u.role, cidade:u.cidade } });
   } catch(e) { res.status(500).json({ error: e.message }); }
@@ -785,6 +789,15 @@ app.put('/filiais/:id', auth, adminOnly, async (req, res) => {
       [nome?String(nome).trim().toUpperCase():null, ativa!=null?(ativa?1:0):null, req.params.id]);
     if (!r) return res.status(404).json({ error:'Não encontrada' });
     res.json(r);
+  } catch(e) { res.status(500).json({ error:e.message }); }
+});
+app.delete('/filiais/:id', auth, adminOnly, async (req, res) => {
+  try {
+    const f = await db.one('SELECT * FROM filiais WHERE id=$1', [req.params.id]);
+    if (!f) return res.status(404).json({ error:'Não encontrada' });
+    if (f.ativa) return res.status(400).json({ error:'Desative a filial antes de apagar' });
+    await db.run('DELETE FROM filiais WHERE id=$1', [req.params.id]);
+    res.json({ ok:true });
   } catch(e) { res.status(500).json({ error:e.message }); }
 });
 

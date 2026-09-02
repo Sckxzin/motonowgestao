@@ -589,7 +589,7 @@ export default function Admin() {
           </div>
 
           <div style={{fontSize:12,color:'var(--tx3)',marginBottom:8}}>
-            💡 Desativar uma filial some com ela das listas de cadastro (moto, venda, peça, usuário), mas mantém todo o histórico já registrado.
+            💡 Desativar uma filial some com ela das listas de cadastro (moto, venda, peça, usuário) e bloqueia o login de quem está vinculado a ela (diretoria nunca é bloqueada). Histórico já registrado continua intacto. "Apagar" só libera depois de desativar, e não tem volta.
           </div>
 
           <div className="card card-sm" style={{marginBottom:14}}>
@@ -637,6 +637,15 @@ export default function Admin() {
                             show(r.data.ativa?'Filial reativada!':'Filial desativada!');
                           } catch(e){show(String(e),'err');}
                         }}>{f.ativa?'🚫 Desativar':'✅ Reativar'}</button>
+                        {!f.ativa && (
+                          <button className="ab red" onClick={async()=>{
+                            if (!window.confirm(`Apagar "${f.nome}" definitivamente? Não afeta histórico já registrado, mas não tem como desfazer essa exclusão.`)) return;
+                            try {
+                              await api.delete('/filiais/'+f.id);
+                              setFiliais(p=>p.filter(x=>x.id!==f.id)); show('Filial apagada!');
+                            } catch(e){show(String(e),'err');}
+                          }}>🗑 Apagar</button>
+                        )}
                       </div>
                     )}
                   </td>
