@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import Topbar from '../components/Topbar';
 import useToast from '../hooks/useToast';
 import api from '../api';
-import { getUser, isDir, formatBRL, cidadeClass, MODELOS_MOTOS, FILIAIS, FILIAIS_VENDA, LOJAS_RETIRADA, FORMAS_PGTO, COMO_CHEGOU, isRepasseObrig, getRepasse, getValorCompra, getValorMinimoVenda } from '../utils';
+import { getUser, isDir, formatBRL, cidadeClass, MODELOS_MOTOS, FILIAIS, LOJAS_RETIRADA, FORMAS_PGTO, COMO_CHEGOU, isRepasseObrig, getRepasse, getValorCompra, getValorMinimoVenda } from '../utils';
 
 function StatusBadge({ status = '', negociadoPor = null, usuarios = [] }) {
   const cls = `badge st-${status.toLowerCase()}`;
@@ -63,6 +63,11 @@ export default function Home() {
   const [loteChassis, setLoteChassis] = useState('');
   const [loteResultado, setLoteResultado] = useState(null); // { criadas, erros } | null
   const [salvandoLote, setSalvandoLote] = useState(false);
+  const [filiaisAtivas, setFiliaisAtivas] = useState([]);
+
+  useEffect(() => {
+    api.get('/filiais').then(r=>setFiliaisAtivas((r.data||[]).filter(f=>f.ativa))).catch(()=>{});
+  }, []);
 
   const loadPecas = useCallback(async () => {
     setLoadingP(true);
@@ -472,7 +477,7 @@ export default function Home() {
           <div className="field"><label>Filial da venda *</label>
             <select className="inp" value={vf.filialVenda||''} onChange={e=>setVf({...vf,filialVenda:e.target.value})}>
               <option value="">Selecione</option>
-              {FILIAIS_VENDA.map(f=><option key={f}>{f}</option>)}
+              {filiaisAtivas.map(f=><option key={f.id}>{f.nome}</option>)}
             </select>
           </div>
           <div className="g2">
@@ -519,7 +524,7 @@ export default function Home() {
           <div className="field"><label>Filial destino</label>
             <select className="inp" value={transfDest} onChange={e=>setTransfDest(e.target.value)}>
               <option value="">Selecione</option>
-              {FILIAIS.filter(f=>f!==motoTransf.filial).map(f=><option key={f}>{f}</option>)}
+              {filiaisAtivas.filter(f=>f.nome!==motoTransf.filial).map(f=><option key={f.id}>{f.nome}</option>)}
             </select>
           </div>
           <div className="mfoot">
@@ -538,7 +543,7 @@ export default function Home() {
           <div className="field"><label>Filial destino</label>
             <select className="inp" value={ptDest} onChange={e=>setPtDest(e.target.value)}>
               <option value="">Selecione</option>
-              {FILIAIS.filter(f=>f!==pecaTransf.cidade).map(f=><option key={f}>{f}</option>)}
+              {filiaisAtivas.filter(f=>f.nome!==pecaTransf.cidade).map(f=><option key={f.id}>{f.nome}</option>)}
             </select>
           </div>
           <div className="mfoot">
@@ -578,7 +583,7 @@ export default function Home() {
           <div className="field"><label>Filial *</label>
             <select className="inp" value={cadPf.cidade} onChange={e=>setCadPf({...cadPf,cidade:e.target.value})}>
               <option value="">Selecione</option>
-              {FILIAIS.map(f=><option key={f}>{f}</option>)}
+              {filiaisAtivas.map(f=><option key={f.id}>{f.nome}</option>)}
             </select>
           </div>
           <div className="mfoot">
@@ -636,7 +641,7 @@ export default function Home() {
                 else setCadMf(p=>({...p,filial:f}));
               }}>
                 <option value="">Selecione</option>
-                {FILIAIS.map(f=><option key={f}>{f}</option>)}
+                {filiaisAtivas.map(f=><option key={f.id}>{f.nome}</option>)}
               </select>
             </div>
             <div className="field"><label>CNPJ *</label><input className="inp" placeholder="00.000.000/0001-00" value={cadMf.cnpj} onChange={e=>setCadMf({...cadMf,cnpj:e.target.value})} /></div>
