@@ -29,6 +29,7 @@ const TODAS_COLUNAS = [
   { key:'brinde',        label:'Brinde',        fixed:false, w:60  },
   { key:'rp',            label:'RP',            fixed:false, w:50  },
   { key:'rr',            label:'RR',            fixed:false, w:50  },
+  { key:'valor_base',    label:'Valor base (comissão)', fixed:false, w:110 },
   { key:'comissao',      label:'Comissão',      fixed:false, w:90  },
   { key:'comissao_antiga', label:'Comissão (sistema antigo)', fixed:false, w:130 },
   { key:'como_chegou',   label:'Como chegou',   fixed:false, w:110 },
@@ -36,7 +37,7 @@ const TODAS_COLUNAS = [
   { key:'acoes',         label:'Ações',         fixed:true,  w:90  },
 ];
 
-const COLS_DEFAULT = ['data','modelo','chassi','cliente','valor','compra','repasse','a_repassar','liquido','filial','empresa','comissao','rp','acoes'];
+const COLS_DEFAULT = ['data','modelo','chassi','cliente','valor','compra','repasse','a_repassar','liquido','filial','empresa','valor_base','comissao','rp','acoes'];
 
 function getEmpresa(v) { return (v.santander === true || v.santander === 1) ? 'EMENEZES' : 'MOTONOW'; }
 function getCNPJ(v)    { return (v.santander === true || v.santander === 1) ? '-' : (v.cnpj_empresa || '-'); }
@@ -291,6 +292,7 @@ export default function VendasMotos() {
       case 'pagamento': return <span style={{fontSize:11,wordBreak:'break-word'}}>{v.forma_pagamento||'—'}</span>;
       case 'gasolina':    return v.gasolina ? formatBRL(v.gasolina) : '-';
       case 'entrega':     return v.entrega_valor ? formatBRL(v.entrega_valor) : '-';
+      case 'valor_base':  return formatBRL(calcularValorLiquido({ valor:v.valor, brinde:v.brinde, gasolina:v.gasolina, entrega_valor:v.entrega_valor, emplacamento:v.emplacamento }));
       case 'filial':      return v.filial_venda || '-';
       case 'origem':      return v.filial_origem || '-';
       case 'empresa':     return <span className={`badge ${getEmpresa(v)==='EMENEZES'?'b-yel':'b-blu'}`}>{getEmpresa(v)}</span>;
@@ -353,6 +355,7 @@ export default function VendasMotos() {
         case 'pagamento':  return v.forma_pagamento || '';
         case 'gasolina':   return Number(v.gasolina||0).toFixed(2);
         case 'entrega':    return Number(v.entrega_valor||0).toFixed(2);
+        case 'valor_base': return calcularValorLiquido({ valor:v.valor, brinde:v.brinde, gasolina:v.gasolina, entrega_valor:v.entrega_valor, emplacamento:v.emplacamento }).toFixed(2);
         case 'comissao':   return Number(v.comissao_valor||0).toFixed(2);
         case 'comissao_antiga': return Number(tierComissao(findComissaoRow(comissoes, v.modelo), v.valor)).toFixed(2);
         case 'empresa':    return getEmpresa(v);
