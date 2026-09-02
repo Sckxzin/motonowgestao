@@ -52,12 +52,19 @@ export default function Admin() {
   const [editMoto, setEditMoto] = useState(null);
   const [em, setEm] = useState({});
 
+  // Filiais
+  const [filiais, setFiliais] = useState([]);
+  const [novaFilial, setNovaFilial] = useState('');
+  const [editFilial, setEditFilial] = useState(null);
+  const [efNome, setEfNome] = useState('');
+
   useEffect(() => {
     if (!user) { nav('/'); return; }
     Promise.all([
       api.get('/admin/resumo').then(r=>setResumo(r.data)),
       api.get('/usuarios').then(r=>setUsuarios(r.data)),
       api.get('/admin/ranking').then(r=>setRanking(r.data)),
+      api.get('/filiais').then(r=>setFiliais(r.data||[])),
     ]).catch(e=>show(String(e),'err'));
   }, []);
 
@@ -67,6 +74,7 @@ export default function Admin() {
     if (tab === 'metas') api.get('/metas', {params:{mes:metaMes,ano:metaAno}}).then(r=>setMetas(r.data||[])).catch(()=>{});
     if (tab === 'log') api.get('/log-atividades',{params:{limite:200}}).then(r=>setLogAtiv(r.data||[])).catch(()=>{});
     if (tab === 'comissoes') api.get('/comissoes').then(r=>setComissoes(r.data||[])).catch(()=>{});
+    if (tab === 'filiais') api.get('/filiais').then(r=>setFiliais(r.data||[])).catch(()=>{});
     if (tab === 'gastos') api.get('/vendas-motos').then(r => {
       const vendas = r.data || [];
       // Agrupa por filial_venda
@@ -142,7 +150,7 @@ export default function Admin() {
       <div className="pc">
         <div className="sh"><span className="sh-t">⚙️ Admin</span></div>
         <div className="tabs">
-          {[['dash','📊 Dashboard'],['usuarios','👥 Usuários'],['ranking','🏪 Ranking'],['pecas','📦 Peças'],['motos','🏍 Motos'],['gastos','💸 Gastos Motos'],['metas','🎯 Metas'],['log','📋 Log'],['comissoes','💵 Comissões']].map(([k,l])=>(
+          {[['dash','📊 Dashboard'],['usuarios','👥 Usuários'],['ranking','🏪 Ranking'],['pecas','📦 Peças'],['motos','🏍 Motos'],['gastos','💸 Gastos Motos'],['metas','🎯 Metas'],['log','📋 Log'],['comissoes','💵 Comissões'],['filiais','🏢 Filiais']].map(([k,l])=>(
             <button key={k} className={`tab ${tab===k?'act':''}`} onClick={()=>setTab(k)}>{l}</button>
           ))}
         </div>
@@ -502,7 +510,7 @@ export default function Admin() {
         <div className="field"><label>Senha *</label><input className="inp" type="password" value={uf.password} onChange={e=>setUf({...uf,password:e.target.value})} /></div>
         <div className="g2">
           <div className="field"><label>Cargo</label><select className="inp" value={uf.role} onChange={e=>setUf({...uf,role:e.target.value})}><option value="FILIAL">Filial</option><option value="DIRETORIA">Diretoria</option></select></div>
-          <div className="field"><label>Filial *</label><select className="inp" value={uf.cidade} onChange={e=>setUf({...uf,cidade:e.target.value})}><option value="">Selecione</option>{FILIAIS.map(f=><option key={f}>{f}</option>)}</select></div>
+          <div className="field"><label>Filial *</label><select className="inp" value={uf.cidade} onChange={e=>setUf({...uf,cidade:e.target.value})}><option value="">Selecione</option>{filiais.filter(f=>f.ativa).map(f=><option key={f.id}>{f.nome}</option>)}</select></div>
         </div>
         <div className="mfoot">
           <button className="btn btn-g" onClick={()=>setModUser(false)}>Cancelar</button>
@@ -566,6 +574,69 @@ export default function Admin() {
                       <div style={{display:'flex',gap:6}}>
                         <button className="ab" onClick={()=>{setEditCom(com.id);setEc({v30:com.v30,v50:com.v50,v100:com.v100});}}>✏️</button>
                         <button className="ab red" onClick={async()=>{ if(!window.confirm('Excluir?')) return; await api.delete('/comissoes/'+com.id).catch(()=>{}); setComissoes(p=>p.filter(x=>x.id!==com.id)); show('Excluído!'); }}>🗑</button>
+                      </div>
+                    )}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table></div>
+        </>}
+
+        {tab==='filiais' && <>
+          <div className="sh" style={{display:'flex',justifyContent:'space-between',alignItems:'center'}}>
+            <span className="sh-t">🏢 Filiais</span>
+          </div>
+
+          <div style={{fontSize:12,color:'var(--tx3)',marginBottom:8}}>
+            💡 Desativar uma filial some com ela das listas de cadastro (moto, venda, peça, usuário), mas mantém todo o histórico já registrado.
+          </div>
+
+          <div className="card card-sm" style={{marginBottom:14}}>
+            <div style={{display:'flex',gap:8,alignItems:'flex-end'}}>
+              <div className="field" style={{flex:1,margin:0}}><label>Nova filial</label>
+                <input className="inp" value={novaFilial} onChange={e=>setNovaFilial(e.target.value)} placeholder="Ex: GARANHUNS" />
+              </div>
+              <button className="btn btn-p btn-sm" onClick={async()=>{
+                if (!novaFilial.trim()) return;
+                try {
+                  const r = await api.post('/filiais', { nome:novaFilial });
+                  setFiliais(p=>[...p,r.data].sort((a,b)=>b.ativa-a.ativa||a.nome.localeCompare(b.nome)));
+                  setNovaFilial(''); show('Filial adicionada!');
+                } catch(e){ show(String(e),'err'); }
+              }}>+ Adicionar</button>
+            </div>
+          </div>
+
+          <div className="tw"><table className="t">
+            <thead><tr><th>Filial</th><th>Status</th><th>Ações</th></tr></thead>
+            <tbody>
+              {filiais.length===0 && <tr><td colSpan={3}><div className="empty"><p>Nenhuma filial cadastrada.</p></div></td></tr>}
+              {filiais.map(f=>(
+                <tr key={f.id}>
+                  <td>{editFilial===f.id ? <input className="inp" style={{width:180}} value={efNome} onChange={e=>setEfNome(e.target.value)} /> : <b>{f.nome}</b>}</td>
+                  <td><span className={`badge ${f.ativa?'b-grn':'b-red'}`}>{f.ativa?'Ativa':'Inativa'}</span></td>
+                  <td>
+                    {editFilial===f.id ? (
+                      <div style={{display:'flex',gap:6}}>
+                        <button className="btn btn-p btn-sm" onClick={async()=>{
+                          try {
+                            const r = await api.put('/filiais/'+f.id, { nome:efNome });
+                            setFiliais(p=>p.map(x=>x.id===f.id?r.data:x)); setEditFilial(null); show('Salvo!');
+                          } catch(e){show(String(e),'err');}
+                        }}>✓</button>
+                        <button className="btn btn-g btn-sm" onClick={()=>setEditFilial(null)}>✕</button>
+                      </div>
+                    ) : (
+                      <div style={{display:'flex',gap:6}}>
+                        <button className="ab" onClick={()=>{setEditFilial(f.id);setEfNome(f.nome);}}>✏️</button>
+                        <button className="ab" onClick={async()=>{
+                          try {
+                            const r = await api.put('/filiais/'+f.id, { ativa: f.ativa?0:1 });
+                            setFiliais(p=>p.map(x=>x.id===f.id?r.data:x));
+                            show(r.data.ativa?'Filial reativada!':'Filial desativada!');
+                          } catch(e){show(String(e),'err');}
+                        }}>{f.ativa?'🚫 Desativar':'✅ Reativar'}</button>
                       </div>
                     )}
                   </td>

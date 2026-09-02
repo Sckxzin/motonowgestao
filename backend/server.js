@@ -760,7 +760,33 @@ app.get('/admin/ranking', auth, adminOnly, async (_, res) => {
   await db.run(`ALTER TABLE vendas_motos ADD COLUMN IF NOT EXISTS entrega_valor REAL NOT NULL DEFAULT 0`);
   await db.run(`ALTER TABLE vendas_motos_pendentes ALTER COLUMN emplacamento TYPE REAL USING emplacamento::real`);
   await db.run(`ALTER TABLE vendas_motos ALTER COLUMN emplacamento TYPE REAL USING emplacamento::real`);
+  await db.run(`CREATE TABLE IF NOT EXISTS filiais (id SERIAL PRIMARY KEY, nome TEXT NOT NULL UNIQUE, ativa INTEGER NOT NULL DEFAULT 1, created_at TIMESTAMPTZ DEFAULT NOW())`);
+  const FILIAIS_SEED = ['ESCADA','IPOJUCA','RIBEIRAO','SAO JOSE','CATENDE','XEXEU','MARAGOGI','IPOJUCA RICARDO','IPOJUCA RICO','CHA GRANDE','FABRICA','TENDA','DIRETORIA','DISTRIBUIÇÃO'];
+  for (const nome of FILIAIS_SEED) {
+    await db.run('INSERT INTO filiais(nome) VALUES($1) ON CONFLICT(nome) DO NOTHING', [nome]);
+  }
 } catch(e) {} })();
+
+app.get('/filiais', auth, async (_, res) => {
+  res.json(await db.q('SELECT * FROM filiais ORDER BY ativa DESC, nome'));
+});
+app.post('/filiais', auth, adminOnly, async (req, res) => {
+  const nome = String(req.body.nome||'').trim().toUpperCase();
+  if (!nome) return res.status(400).json({ error:'Nome obrigatório' });
+  try {
+    const r = await db.one('INSERT INTO filiais(nome) VALUES($1) RETURNING *', [nome]);
+    res.json(r);
+  } catch { res.status(409).json({ error:'Filial já existe' }); }
+});
+app.put('/filiais/:id', auth, adminOnly, async (req, res) => {
+  const { nome, ativa } = req.body;
+  try {
+    const r = await db.one('UPDATE filiais SET nome=COALESCE($1,nome),ativa=COALESCE($2,ativa) WHERE id=$3 RETURNING *',
+      [nome?String(nome).trim().toUpperCase():null, ativa!=null?(ativa?1:0):null, req.params.id]);
+    if (!r) return res.status(404).json({ error:'Não encontrada' });
+    res.json(r);
+  } catch(e) { res.status(500).json({ error:e.message }); }
+});
 
 const CHECKLIST_PADRAO = ['Óleo do motor','Filtro de óleo','Filtro de ar','Vela de ignição','Corrente e coroa','Pneu dianteiro','Pneu traseiro','Freio dianteiro','Freio traseiro','Fluido de freio','Suspensão dianteira','Suspensão traseira','Farol e lanternas','Buzina','Espelhos retrovisores','Cabo de acelerador','Cabo de embreagem','Bateria','Nível de combustível','Documentação'];
 
