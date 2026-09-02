@@ -134,6 +134,20 @@ export function tierComissao(comissaoRow, valorLiquido) {
   if (v >= comissaoRow.v30)  return 30;
   return 30;
 }
+// Comissão de verdade: valor da faixa + acréscimo por cada R$100 que o valor
+// líquido passar do mínimo daquela faixa. tierComissao (acima) fica só pra
+// mostrar o valor fixo do sistema antigo, como comparação.
+const INCREMENTO_POR_TIER = { 30: 4, 50: 7, 100: 25 };
+export function calcularComissaoComExcedente(comissaoRow, valorLiquido) {
+  if (!comissaoRow) return 30;
+  const v = Number(valorLiquido||0);
+  let tier, minimo;
+  if (v >= comissaoRow.v100) { tier = 100; minimo = comissaoRow.v100; }
+  else if (v >= comissaoRow.v50) { tier = 50; minimo = comissaoRow.v50; }
+  else { tier = 30; minimo = comissaoRow.v30; }
+  const excedente = Math.max(0, v - minimo);
+  return Math.round((tier + INCREMENTO_POR_TIER[tier] * (excedente / 100)) * 100) / 100;
+}
 export function findComissaoRow(comissoes, modelo) {
   if (!modelo) return null;
   const m = String(modelo).toUpperCase().trim();

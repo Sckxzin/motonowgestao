@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import Topbar from '../components/Topbar';
 import useToast from '../hooks/useToast';
 import api from '../api';
-import { getUser, formatBRL, fmtDate, FILIAIS, calcularValorLiquido, tierComissao, findComissaoRow } from '../utils';
+import { getUser, formatBRL, fmtDate, FILIAIS, calcularValorLiquido, tierComissao, calcularComissaoComExcedente, findComissaoRow } from '../utils';
 
 const CIDADES_PADRAO = ['ESCADA','IPOJUCA','RIBEIRAO','SAO JOSE','CATENDE','XEXEU','MARAGOGI','IPOJUCA RICO','CHA GRANDE','TENDA'];
 
@@ -150,11 +150,14 @@ export default function VendasMotos() {
   const [comissoes, setComissoes] = useState([]);
 
   useEffect(() => { api.get('/comissoes').then(r=>setComissoes(r.data)).catch(()=>{}); }, []);
+  const valorLiquidoCalculado = useMemo(() => {
+    if (!edit) return 0;
+    return calcularValorLiquido({ valor:ef.valor, brinde:ef.brinde, gasolina:ef.gasolina, entrega_valor:ef.entrega_valor, emplacamento:ef.emplacamento });
+  }, [edit, ef.valor, ef.brinde, ef.gasolina, ef.entrega_valor, ef.emplacamento]);
   const comissaoCalculada = useMemo(() => {
     if (!edit) return 0;
-    const liquido = calcularValorLiquido({ valor:ef.valor, brinde:ef.brinde, gasolina:ef.gasolina, entrega_valor:ef.entrega_valor, emplacamento:ef.emplacamento });
-    return tierComissao(findComissaoRow(comissoes, ef.modelo), liquido);
-  }, [edit, ef.valor, ef.brinde, ef.gasolina, ef.entrega_valor, ef.emplacamento, ef.modelo, comissoes]);
+    return calcularComissaoComExcedente(findComissaoRow(comissoes, ef.modelo), valorLiquidoCalculado);
+  }, [edit, valorLiquidoCalculado, ef.modelo, comissoes]);
   const comissaoAntigaCalculada = useMemo(() => {
     if (!edit) return 0;
     return tierComissao(findComissaoRow(comissoes, ef.modelo), ef.valor);
@@ -684,7 +687,7 @@ export default function VendasMotos() {
               <div className="field"><label>Repasse (R$)</label><input className="inp" type="number" step="0.01" value={ef.repasse} onChange={e=>setEf({...ef,repasse:e.target.value})} /></div>
               <div className="field"><label>Comissão (calculada)</label>
                 <div className="inp" style={{display:'flex',alignItems:'center',fontWeight:600,color:'var(--grn)'}}>{formatBRL(comissaoCalculada)}</div>
-                <div style={{fontSize:11,marginTop:4,color:'var(--tx3)'}}>Sistema antigo (valor bruto): {formatBRL(comissaoAntigaCalculada)}</div>
+                <div style={{fontSize:11,marginTop:4,color:'var(--tx3)'}}>Valor líquido: {formatBRL(valorLiquidoCalculado)} · Sistema antigo (valor bruto, fixo): {formatBRL(comissaoAntigaCalculada)}</div>
                 {!findComissaoRow(comissoes, ef.modelo) && (
                   <div style={{fontSize:11,marginTop:4,color:'var(--red)'}}>⚠️ "{ef.modelo}" sem faixa cadastrada — usando padrão fixo R$30. Cadastre em Admin → Comissões.</div>
                 )}
