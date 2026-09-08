@@ -43,6 +43,7 @@ export default function Oficina() {
   const [lista, setLista] = useState([]);
   const [loading, setLoading] = useState(true);
   const [filtroStatus, setFiltroStatus] = useState('');
+  const [filtroCidade, setFiltroCidade] = useState('');
   const [busca, setBusca] = useState('');
   const [filtDi, setFiltDi] = useState('');
   const [filtDf, setFiltDf] = useState('');
@@ -69,13 +70,14 @@ export default function Oficina() {
     try {
       const params = {};
       if (filtroStatus) params.status = filtroStatus;
+      if (filtroCidade) params.cidade = filtroCidade;
       const r = await api.get('/os', { params });
       setLista(r.data || []);
     } catch (e) { show(String(e), 'err'); }
     finally { setLoading(false); }
-  }, [filtroStatus]);
+  }, [filtroStatus, filtroCidade]);
 
-  useEffect(() => { if (!user) nav('/'); else carregar(); }, [filtroStatus, carregar]);
+  useEffect(() => { if (!user) nav('/'); else carregar(); }, [filtroStatus, filtroCidade, carregar]);
 
   function aplicarAtalho(label, fn) {
     const [i, e] = fn();
@@ -216,11 +218,18 @@ export default function Oficina() {
               <option value="">Todos os status</option>
               {Object.entries(STATUS_INFO).map(([v,s]) => <option key={v} value={v}>{s.label}</option>)}
             </select>
+            {isDir(user) && (
+              <select className="inp" style={{ width:'auto' }} value={filtroCidade} onChange={e => setFiltroCidade(e.target.value)}>
+                <option value="">Todas as filiais</option>
+                {FILIAIS.map(f => <option key={f}>{f}</option>)}
+              </select>
+            )}
             <input className="inp" type="date" style={{width:'auto'}} value={filtDi} onChange={e=>{setFiltDi(e.target.value);setAtalhoAtivo('');}} />
             <span style={{lineHeight:'38px',color:'var(--tx3)'}}>até</span>
             <input className="inp" type="date" style={{width:'auto'}} value={filtDf} onChange={e=>{setFiltDf(e.target.value);setAtalhoAtivo('');}} />
             {(filtDi||filtDf) && <button className="btn btn-g btn-sm" onClick={()=>{setFiltDi('');setFiltDf('');setAtalhoAtivo('');}}>✕ Datas</button>}
             {filtroStatus && <button className="ab" onClick={() => setFiltroStatus('')}>✕ Status</button>}
+            {filtroCidade && <button className="ab" onClick={() => setFiltroCidade('')}>✕ Filial</button>}
           </div>
           <div style={{display:'flex',gap:6,flexWrap:'wrap'}}>
             {ATALHOS.map(a=>(
