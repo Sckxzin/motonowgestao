@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import Topbar from '../components/Topbar';
 import useToast from '../hooks/useToast';
 import api from '../api';
-import { getUser, isDir, formatBRL, cidadeClass, MODELOS_MOTOS, FILIAIS, LOJAS_RETIRADA, FORMAS_PGTO, COMO_CHEGOU, isRepasseObrig, getRepasse, getValorCompra, getValorMinimoVenda } from '../utils';
+import { getUser, isDir, formatBRL, cidadeClass, MODELOS_MOTOS, FILIAIS, LOJAS_RETIRADA, FORMAS_PGTO, COMO_CHEGOU, isRepasseObrig, getRepasse, getValorCompra, getValorMinimoVenda, calcularValorLiquido } from '../utils';
 
 function StatusBadge({ status = '', negociadoPor = null, usuarios = [] }) {
   const cls = `badge st-${status.toLowerCase()}`;
@@ -509,6 +509,15 @@ export default function Home() {
             <label className="ck"><input type="checkbox" checked={!!vf.brinde} onChange={e=>setVf({...vf,brinde:e.target.checked})} /> Capacete de brinde</label>
             <label className="ck"><input type="checkbox" checked={!!vf.emplacamento} onChange={e=>setVf({...vf,emplacamento:e.target.checked})} /> Inclui emplacamento</label>
           </div>
+          {vf.valor && (
+            <div style={{marginBottom:16,padding:'10px 14px',borderRadius:'var(--r)',background:'var(--s3)',border:'1px solid var(--bd)'}}>
+              <div style={{fontSize:12,color:'var(--tx3)'}}>Base da comissão (estimativa)</div>
+              <div style={{fontSize:18,fontWeight:700,color:'var(--grn)'}}>
+                {formatBRL(calcularValorLiquido({ valor:vf.valor, brinde:vf.brinde, gasolina:vf.gasolina, entrega_valor:0, emplacamento:0 }))}
+              </div>
+              <div style={{fontSize:11,color:'var(--tx3)',marginTop:2}}>Valor da venda − capacete (se brinde) − gasolina. Entrega e emplacamento ainda não entram — a diretoria define na aprovação.</div>
+            </div>
+          )}
           <div className="mfoot">
             <button className="btn btn-g" onClick={()=>setMotoVenda(null)}>Cancelar</button>
             <button className="btn btn-p" onClick={venderMoto}>Confirmar</button>
