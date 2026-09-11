@@ -13,6 +13,7 @@ const TODAS_COLUNAS = [
   { key:'cor',           label:'Cor',           fixed:false, w:80  },
   { key:'chassi',        label:'Chassi',        fixed:false, w:160 },
   { key:'cliente',       label:'Cliente',       fixed:true,  w:140 },
+  { key:'cpf',           label:'CPF',           fixed:false, w:110 },
   { key:'telefone',      label:'Telefone',      fixed:false, w:120 },
   { key:'valor',         label:'Valor',         fixed:true,  w:90  },
   { key:'compra',        label:'Compra',        fixed:false, w:90  },
@@ -39,7 +40,7 @@ const TODAS_COLUNAS = [
   { key:'acoes',         label:'Ações',         fixed:true,  w:90  },
 ];
 
-const COLS_DEFAULT = ['data','modelo','chassi','cliente','valor','compra','repasse','a_repassar','liquido','filial','empresa','descontos','valor_base','faixa','comissao','rp','acoes'];
+const COLS_DEFAULT = ['data','modelo','chassi','cliente','cpf','valor','compra','repasse','a_repassar','liquido','filial','empresa','descontos','valor_base','faixa','comissao','rp','acoes'];
 
 function getEmpresa(v) { return (v.santander === true || v.santander === 1) ? 'EMENEZES' : 'MOTONOW'; }
 function getCNPJ(v)    { return (v.santander === true || v.santander === 1) ? '-' : (v.cnpj_empresa || '-'); }
@@ -294,6 +295,7 @@ export default function VendasMotos() {
       case 'cor':         return v.cor || '-';
       case 'chassi':      return <span style={{fontFamily:'var(--mono)',fontSize:11}}>{(v.chassi||'').trim()}</span>;
       case 'cliente':     return v.nome_cliente || '-';
+      case 'cpf':         return v.cpf || '-';
       case 'telefone':    return v.numero_cliente || '-';
       case 'valor':       return <b style={{color:'var(--grn)'}}>{formatBRL(v.valor)}</b>;
       case 'compra':      return formatBRL(v.valor_compra);
