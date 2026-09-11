@@ -5,7 +5,7 @@ import useToast from '../hooks/useToast';
 import api from '../api';
 import { getUser, formatBRL, fmtDate, FILIAIS, calcularValorLiquido, tierComissao, calcularComissaoComExcedente, findComissaoRow } from '../utils';
 
-const CIDADES_PADRAO = ['ESCADA','IPOJUCA','RIBEIRAO','SAO JOSE','CATENDE','XEXEU','MARAGOGI','IPOJUCA RICO','CHA GRANDE','TENDA'];
+const CIDADES_PADRAO = ['ESCADA','IPOJUCA','RIBEIRAO','SAO JOSE','CATENDE','MARAGOGI','IPOJUCA RICO','CHA GRANDE','TENDA'];
 
 const TODAS_COLUNAS = [
   { key:'data',          label:'Data',          fixed:true,  w:88  },
