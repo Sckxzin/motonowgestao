@@ -366,6 +366,11 @@ export default function VendasMotos() {
     const rows = filtered.map(v => colsAtivas.filter(c=>c.key!=='acoes').map(c => {
       switch(c.key) {
         case 'data':       return fmtDate(v.data_venda||v.created_at);
+        case 'cliente':    return v.nome_cliente || '';
+        case 'telefone':   return v.numero_cliente || '';
+        case 'filial':     return v.filial_venda || '';
+        case 'origem':     return v.filial_origem || '';
+        case 'cnpj':       return getCNPJ(v);
         case 'valor':      return Number(v.valor||0).toFixed(2);
         case 'compra':     return Number(v.valor_compra||0).toFixed(2);
         case 'repasse':    return Number(v.repasse||0).toFixed(2);
