@@ -110,14 +110,13 @@ export default function Admin() {
   }
 
   async function apagarTodasPecas() {
-    const aviso = `Isso apaga PERMANENTEMENTE todas as peças cadastradas, de TODAS as filiais.\n\nPeças que já foram usadas em alguma venda, revisão ou OS ficam intactas (o histórico continua funcionando normalmente).\n\nTem certeza?`;
+    const aviso = `Isso apaga PERMANENTEMENTE todas as peças cadastradas, de TODAS as filiais, sem exceção — o catálogo fica zerado.\n\nO histórico de vendas, revisões e OS não é afetado (o nome da peça usada continua aparecendo neles), mas a peça em si deixa de existir no estoque.\n\nTem certeza?`;
     if (!window.confirm(aviso)) return;
-    if (!window.confirm('Confirma de novo: apagar todas as peças sem histórico, de todas as filiais?')) return;
+    if (!window.confirm('Confirma de novo: apagar TODAS as peças, de todas as filiais, deixando o catálogo zerado?')) return;
     try {
       const r = await api.delete('/pecas');
-      show(`${r.data.apagadas} peça(s) apagada(s). ${r.data.mantidas} mantida(s) por já ter histórico.`);
-      const rp = await api.get('/pecas');
-      setPecas(rp.data || []);
+      show(`${r.data.apagadas} peça(s) apagada(s). Catálogo zerado.`);
+      setPecas([]);
     } catch(e) { show(String(e),'err'); }
   }
 
@@ -227,7 +226,7 @@ export default function Admin() {
             <button className="btn btn-g btn-sm" style={{color:'var(--red)',borderColor:'var(--redbd)'}} onClick={apagarTodasPecas}>🗑 Apagar todas as peças</button>
           </div>
           <div style={{fontSize:12,color:'var(--tx3)',marginBottom:8}}>
-            💡 Apaga o catálogo inteiro, de todas as filiais. Peças já usadas em vendas, revisões ou OS ficam intactas.
+            💡 Apaga o catálogo inteiro, de todas as filiais, sem exceção. O histórico de vendas, revisões e OS continua mostrando o nome da peça usada.
           </div>
           <div className="card" style={{marginBottom:14}}>
             <input className="inp" placeholder="Buscar por nome..." value={buscaPeca} onChange={e=>setBuscaPeca(e.target.value)} />

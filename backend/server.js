@@ -197,19 +197,15 @@ app.delete('/pecas', auth, adminOnly, async (req, res) => {
   const client = await db.connect();
   try {
     await client.query('BEGIN');
-    const total = Number((await client.query('SELECT COUNT(*) as n FROM pecas')).rows[0].n);
-    const r = await client.query(`
-      DELETE FROM pecas
-      WHERE id NOT IN (
-        SELECT DISTINCT peca_id FROM venda_itens WHERE peca_id IS NOT NULL
-        UNION SELECT DISTINCT peca_id FROM revisao_itens WHERE peca_id IS NOT NULL
-        UNION SELECT DISTINCT peca_id FROM os_itens WHERE peca_id IS NOT NULL
-      )
-      RETURNING id
-    `);
+    // desvincula o histórico (o nome da peça já fica salvo em nome_peca em cada tabela)
+    // pra poder apagar TODAS as peças sem violar a foreign key
+    await client.query('UPDATE venda_itens SET peca_id=NULL WHERE peca_id IS NOT NULL');
+    await client.query('UPDATE revisao_itens SET peca_id=NULL WHERE peca_id IS NOT NULL');
+    await client.query('UPDATE os_itens SET peca_id=NULL WHERE peca_id IS NOT NULL');
+    const r = await client.query('DELETE FROM pecas RETURNING id');
     await client.query('COMMIT');
-    await registrarLog(req, 'APAGAR_TODAS_PECAS', 'pecas', '', `${r.rows.length} apagada(s), ${total-r.rows.length} mantida(s) por já ter histórico`);
-    res.json({ apagadas: r.rows.length, mantidas: total - r.rows.length });
+    await registrarLog(req, 'APAGAR_TODAS_PECAS', 'pecas', '', `${r.rows.length} peça(s) apagada(s)`);
+    res.json({ apagadas: r.rows.length });
   } catch(e) { await client.query('ROLLBACK'); res.status(400).json({ error: e.message }); }
   finally { client.release(); }
 });
