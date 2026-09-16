@@ -785,6 +785,13 @@ app.get('/admin/ranking', auth, adminOnly, async (_, res) => {
   for (const nome of FILIAIS_SEED) {
     await db.run('INSERT INTO filiais(nome) VALUES($1) ON CONFLICT(nome) DO NOTHING', [nome]);
   }
+  const PECAS_SEED_FILIAIS = ['CATENDE','SAO JOSE','ESCADA','IPOJUCA','RIBEIRAO','CHA GRANDE'];
+  for (const cidade of PECAS_SEED_FILIAIS) {
+    for (const nome of ['Capacete','Óleo']) {
+      const existe = await db.one('SELECT id FROM pecas WHERE nome=$1 AND cidade=$2', [nome, cidade]);
+      if (!existe) await db.run('INSERT INTO pecas(nome,preco,estoque,cidade) VALUES($1,0,0,$2)', [nome, cidade]);
+    }
+  }
 } catch(e) {} })();
 
 app.get('/filiais', auth, async (_, res) => {
