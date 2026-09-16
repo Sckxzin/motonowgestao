@@ -792,6 +792,19 @@ app.get('/admin/ranking', auth, adminOnly, async (_, res) => {
       if (!existe) await db.run('INSERT INTO pecas(nome,preco,estoque,cidade) VALUES($1,0,0,$2)', [nome, cidade]);
     }
   }
+  const PECAS_SEED_ESCADA = [
+    { nome: 'Pastilha de freio', tipo_moto: 'SHI', estoque: 1 },
+    { nome: 'Pastilha de freio', tipo_moto: 'JEF', estoque: 15 },
+    { nome: 'Interruptor de partida', tipo_moto: 'JET', estoque: 2 },
+    { nome: 'Grade de ventilação', tipo_moto: 'JET', estoque: 5 },
+    { nome: 'Interruptor do farol alto', tipo_moto: 'JET', estoque: 5 },
+    { nome: 'Sensor de marcha', tipo_moto: 'SHI', estoque: 3 },
+    { nome: 'Relé do pisca', tipo_moto: null, estoque: 3 },
+  ];
+  for (const p of PECAS_SEED_ESCADA) {
+    const existe = await db.one('SELECT id FROM pecas WHERE nome=$1 AND cidade=$2 AND tipo_moto IS NOT DISTINCT FROM $3', [p.nome, 'ESCADA', p.tipo_moto]);
+    if (!existe) await db.run('INSERT INTO pecas(nome,preco,estoque,cidade,tipo_moto) VALUES($1,0,$2,$3,$4)', [p.nome, p.estoque, 'ESCADA', p.tipo_moto]);
+  }
 } catch(e) {} })();
 
 app.get('/filiais', auth, async (_, res) => {
