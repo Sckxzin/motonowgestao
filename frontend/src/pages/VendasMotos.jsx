@@ -5,7 +5,7 @@ import useToast from '../hooks/useToast';
 import api from '../api';
 import { getUser, formatBRL, fmtDate, FILIAIS, calcularValorLiquido, tierComissao, calcularComissaoComExcedente, findComissaoRow } from '../utils';
 
-const CIDADES_PADRAO = ['ESCADA','IPOJUCA','RIBEIRAO','SAO JOSE','CATENDE','MARAGOGI','IPOJUCA RICO','CHA GRANDE','TENDA'];
+const CIDADES_PADRAO = ['ESCADA','IPOJUCA','RIBEIRAO','SAO JOSE','CATENDE','MARAGOGI','IPOJUCA RICO','CHA GRANDE','TENDA','BRENO ESCADA'];
 
 const TODAS_COLUNAS = [
   { key:'data',          label:'Data',          fixed:true,  w:88  },
@@ -703,7 +703,7 @@ export default function VendasMotos() {
             <div className="g2">
               <div className="field"><label>Filial venda</label>
                 <select className="inp" value={ef.filial_venda} onChange={e=>setEf({...ef,filial_venda:e.target.value})}>
-                  {['ESCADA','IPOJUCA','RIBEIRAO','SAO JOSE','CATENDE','XEXEU','MARAGOGI','CHA GRANDE','DIRETORIA','DISTRIBUIÇÃO'].map(f=><option key={f}>{f}</option>)}
+                  {['ESCADA','IPOJUCA','RIBEIRAO','SAO JOSE','CATENDE','XEXEU','MARAGOGI','CHA GRANDE','BRENO ESCADA','DIRETORIA','DISTRIBUIÇÃO'].map(f=><option key={f}>{f}</option>)}
                 </select>
               </div>
               <div className="field"><label>Filial origem</label><input className="inp" value={ef.filial_origem} onChange={e=>setEf({...ef,filial_origem:e.target.value})} /></div>

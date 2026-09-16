@@ -651,7 +651,7 @@ export default function DashboardAuto() {
           <div style={{height:'100%',overflowY:'auto',display:'flex',flexDirection:'column',gap:14}}>
             <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fill,minmax(280px,1fr))',gap:14}}>
               {(() => {
-                const FILIAIS_DASH = ['ESCADA','IPOJUCA','RIBEIRAO','SAO JOSE','CATENDE','XEXEU','MARAGOGI','CHA GRANDE'];
+                const FILIAIS_DASH = ['ESCADA','IPOJUCA','RIBEIRAO','SAO JOSE','CATENDE','XEXEU','MARAGOGI','CHA GRANDE','BRENO ESCADA'];
                 return FILIAIS_DASH.map(filial => {
                   const m = metas.find(x=>x.filial===filial);
                   const vendasFilial = base.filter(v=>v.filial_venda===filial);
