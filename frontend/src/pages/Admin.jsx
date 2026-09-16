@@ -78,7 +78,7 @@ export default function Admin() {
     if (tab === 'gastos') api.get('/vendas-motos').then(r => {
       const vendas = r.data || [];
       // Agrupa por filial_venda
-      const FILIAIS = ['ESCADA','IPOJUCA','RIBEIRAO','SAO JOSE','CATENDE','XEXEU','MARAGOGI','CHA GRANDE','DIRETORIA'];
+      const FILIAIS = ['ESCADA','IPOJUCA','RIBEIRAO','SAO JOSE','CATENDE','XEXEU','MARAGOGI','CHA GRANDE','BRENO ESCADA','DIRETORIA'];
       const mapa = {};
       FILIAIS.forEach(f => { mapa[f] = { filial:f, capacetes:0, gasolina:0, emplacamento:0, vendas:[] }; });
       vendas.forEach(v => {
