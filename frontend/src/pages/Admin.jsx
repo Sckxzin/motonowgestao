@@ -109,6 +109,18 @@ export default function Admin() {
     } catch(e) { show(String(e),'err'); }
   }
 
+  async function apagarTodasPecas() {
+    const aviso = `Isso apaga PERMANENTEMENTE todas as peças cadastradas, de TODAS as filiais.\n\nPeças que já foram usadas em alguma venda, revisão ou OS ficam intactas (o histórico continua funcionando normalmente).\n\nTem certeza?`;
+    if (!window.confirm(aviso)) return;
+    if (!window.confirm('Confirma de novo: apagar todas as peças sem histórico, de todas as filiais?')) return;
+    try {
+      const r = await api.delete('/pecas');
+      show(`${r.data.apagadas} peça(s) apagada(s). ${r.data.mantidas} mantida(s) por já ter histórico.`);
+      const rp = await api.get('/pecas');
+      setPecas(rp.data || []);
+    } catch(e) { show(String(e),'err'); }
+  }
+
   async function salvarMoto() {
     try {
       await api.put('/motos/'+editMoto.id, em);
@@ -210,7 +222,13 @@ export default function Admin() {
         </>}
 
         {tab==='pecas' && <>
-          <div className="sh"><span className="sh-t">📦 Gerenciar Peças</span></div>
+          <div className="sh" style={{display:'flex',justifyContent:'space-between',alignItems:'center'}}>
+            <span className="sh-t">📦 Gerenciar Peças</span>
+            <button className="btn btn-g btn-sm" style={{color:'var(--red)',borderColor:'var(--redbd)'}} onClick={apagarTodasPecas}>🗑 Apagar todas as peças</button>
+          </div>
+          <div style={{fontSize:12,color:'var(--tx3)',marginBottom:8}}>
+            💡 Apaga o catálogo inteiro, de todas as filiais. Peças já usadas em vendas, revisões ou OS ficam intactas.
+          </div>
           <div className="card" style={{marginBottom:14}}>
             <input className="inp" placeholder="Buscar por nome..." value={buscaPeca} onChange={e=>setBuscaPeca(e.target.value)} />
           </div>
