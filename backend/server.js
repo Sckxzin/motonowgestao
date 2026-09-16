@@ -193,6 +193,26 @@ app.put('/pecas/:id', auth, adminOnly, async (req, res) => {
     res.json(r);
   } catch(e) { res.status(500).json({ error: e.message }); }
 });
+app.delete('/pecas', auth, adminOnly, async (req, res) => {
+  const client = await db.connect();
+  try {
+    await client.query('BEGIN');
+    const total = Number((await client.query('SELECT COUNT(*) as n FROM pecas')).rows[0].n);
+    const r = await client.query(`
+      DELETE FROM pecas
+      WHERE id NOT IN (
+        SELECT DISTINCT peca_id FROM venda_itens WHERE peca_id IS NOT NULL
+        UNION SELECT DISTINCT peca_id FROM revisao_itens WHERE peca_id IS NOT NULL
+        UNION SELECT DISTINCT peca_id FROM os_itens WHERE peca_id IS NOT NULL
+      )
+      RETURNING id
+    `);
+    await client.query('COMMIT');
+    await registrarLog(req, 'APAGAR_TODAS_PECAS', 'pecas', '', `${r.rows.length} apagada(s), ${total-r.rows.length} mantida(s) por já ter histórico`);
+    res.json({ apagadas: r.rows.length, mantidas: total - r.rows.length });
+  } catch(e) { await client.query('ROLLBACK'); res.status(400).json({ error: e.message }); }
+  finally { client.release(); }
+});
 app.delete('/pecas/:id', auth, adminOnly, async (req, res) => {
   try { await db.run('DELETE FROM pecas WHERE id=$1', [req.params.id]); res.json({ ok: true }); }
   catch(e) { res.status(500).json({ error: e.message }); }
