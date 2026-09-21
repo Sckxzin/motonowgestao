@@ -3,7 +3,7 @@
 // ═══════════════════════════════════════════
 const FILIAIS = [
   'ESCADA','IPOJUCA','RIBEIRAO','SAO JOSE','CATENDE',
-  'MARAGOGI','IPOJUCA RICARDO','CHA GRANDE','FABRICA','TENDA','BRENO ESCADA',
+  'MARAGOGI','CHA GRANDE','FABRICA','TENDA','BRENO ESCADA',
 ];
 const FILIAIS_REPASSE = ['SAO JOSE','MARAGOGI','CATENDE','XEXEU'];
 // ═══════════════════════════════════════════
