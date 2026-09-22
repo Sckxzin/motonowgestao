@@ -12,6 +12,7 @@ import Vendas         from './pages/Vendas';
 import VendasMotos    from './pages/VendasMotos';
 import Pendentes      from './pages/Pendentes';
 import Admin          from './pages/Admin';
+import VendasGerais   from './pages/VendasGerais';
 import Emplacamentos  from './pages/Emplacamentos';
 import Financeiro     from './pages/Financeiro';
 import Reciclagem     from './pages/Reciclagem';
@@ -44,6 +45,7 @@ export default function App() {
         <Route path="/vendas-motos"  element={<Guard adminOnly><VendasMotos /></Guard>} />
         <Route path="/pendentes"     element={<Guard adminOnly><Pendentes /></Guard>} />
         <Route path="/admin"         element={<Guard adminOnly><Admin /></Guard>} />
+        <Route path="/vendas-gerais" element={<Guard adminOnly><VendasGerais /></Guard>} />
         <Route path="/emplacamentos" element={<Guard adminOnly><Emplacamentos /></Guard>} />
         <Route path="/financeiro"    element={<Guard adminOnly><Financeiro /></Guard>} />
         <Route path="/dashboard"      element={<Guard><DashboardAuto /></Guard>} />
