@@ -54,6 +54,7 @@ export default function Topbar({ cartCount = 0 }) {
       </div>
       <nav className="tb-nav">
         {isDir(user) && <button className={at('/admin')} onClick={() => nav('/admin')}>⚙️ Admin</button>}
+        {isDir(user) && <button className={at('/vendas-gerais')} onClick={() => nav('/vendas-gerais')}>📊 Vendas Gerais</button>}
         {isDir(user) && <button className={at('/vendas-motos')} onClick={() => nav('/vendas-motos')}>🏍 Hist.</button>}
         {isDir(user) && <button className={at('/vendas')} onClick={() => nav('/vendas')}>🧾 Vendas</button>}
         {isDir(user) && <button className={at('/pendentes')} onClick={() => nav('/pendentes')}>🕒 Aprovar</button>}
