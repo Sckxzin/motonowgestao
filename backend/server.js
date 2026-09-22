@@ -781,10 +781,11 @@ app.get('/admin/ranking', auth, adminOnly, async (_, res) => {
   await db.run(`ALTER TABLE vendas_motos_pendentes ALTER COLUMN emplacamento TYPE REAL USING emplacamento::real`);
   await db.run(`ALTER TABLE vendas_motos ALTER COLUMN emplacamento TYPE REAL USING emplacamento::real`);
   await db.run(`CREATE TABLE IF NOT EXISTS filiais (id SERIAL PRIMARY KEY, nome TEXT NOT NULL UNIQUE, ativa INTEGER NOT NULL DEFAULT 1, created_at TIMESTAMPTZ DEFAULT NOW())`);
-  const FILIAIS_SEED = ['ESCADA','IPOJUCA','RIBEIRAO','SAO JOSE','CATENDE','XEXEU','MARAGOGI','IPOJUCA RICARDO','IPOJUCA RICO','CHA GRANDE','FABRICA','TENDA','BRENO ESCADA','DIRETORIA','DISTRIBUIÇÃO'];
+  const FILIAIS_SEED = ['ESCADA','IPOJUCA','RIBEIRAO','SAO JOSE','CATENDE','XEXEU','MARAGOGI','CHA GRANDE','FABRICA','TENDA','BRENO ESCADA','DIRETORIA','DISTRIBUIÇÃO'];
   for (const nome of FILIAIS_SEED) {
     await db.run('INSERT INTO filiais(nome) VALUES($1) ON CONFLICT(nome) DO NOTHING', [nome]);
   }
+  await db.run(`DELETE FROM filiais WHERE nome IN ('IPOJUCA RICARDO','IPOJUCA RICO')`);
   const PECAS_SEED_FILIAIS = ['CATENDE','SAO JOSE','ESCADA','IPOJUCA','RIBEIRAO','CHA GRANDE'];
   for (const cidade of PECAS_SEED_FILIAIS) {
     for (const nome of ['Capacete','Óleo']) {
