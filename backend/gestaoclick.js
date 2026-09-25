@@ -1,50 +1,65 @@
 const BASE = process.env.GC_BASE_URL || 'https://api.beteltecnologia.com';
 
-function headers() {
-  return {
-    'access-token': process.env.GC_ACCESS_TOKEN,
-    'secret-access-token': process.env.GC_SECRET_TOKEN,
-    'Content-Type': 'application/json',
-  };
-}
-
-async function gcGet(path, params = {}) {
-  if (!process.env.GC_ACCESS_TOKEN || !process.env.GC_SECRET_TOKEN) {
-    throw new Error('GC_ACCESS_TOKEN/GC_SECRET_TOKEN não configurados neste ambiente');
-  }
-  const url = new URL(path, BASE);
-  Object.entries(params).forEach(([k, v]) => url.searchParams.set(k, v));
-  const res = await fetch(url, { headers: headers() });
-  const text = await res.text();
-  let json;
-  try { json = JSON.parse(text); } catch { json = text; }
-  return { status: res.status, json };
-}
-
-async function gcPost(path, body) {
-  if (!process.env.GC_ACCESS_TOKEN || !process.env.GC_SECRET_TOKEN) {
-    throw new Error('GC_ACCESS_TOKEN/GC_SECRET_TOKEN não configurados neste ambiente');
-  }
-  const url = new URL(path, BASE);
-  const res = await fetch(url, { method: 'POST', headers: headers(), body: JSON.stringify(body) });
-  const text = await res.text();
-  let json;
-  try { json = JSON.parse(text); } catch { json = text; }
-  return { status: res.status, json };
-}
-
-// Cada moto/venda carrega seu próprio "CNPJ empresa" (texto livre). O GestãoClick
-// não tem uma loja por filial — só uma loja por CNPJ/empresa. Mapeamento fixo,
-// confirmado com a diretoria em 2026-09-25.
+// Cada empresa (CNPJ) no GestãoClick tem seus PRÓPRIOS dados (clientes, produtos,
+// vendas) — não é uma base compartilhada com "loja" só como etiqueta. Confirmado
+// na prática em 2026-09-25: um produto cadastrado em RIBEIRAO não aparecia pra
+// um token criado noutra empresa. Por isso cada loja tem seu próprio par de
+// tokens, lido de variáveis de ambiente com o sufixo abaixo (ex: GC_ACCESS_TOKEN_IPOJUCA).
+// Se as variáveis específicas da loja não existirem, cai pro token genérico
+// (GC_ACCESS_TOKEN/GC_SECRET_TOKEN) — mantém compatibilidade com o que já tinha.
 const LOJAS_POR_CNPJ = {
-  '58021497000104': { id: '515958', nome: 'IPOJUCA' },
-  '61065883000102': { id: '516343', nome: 'MOTONOW ESCADA' },
-  '62230241000184': { id: '552162', nome: 'RIBEIRAO' },
-  '62619032000127': { id: '554577', nome: 'LITORAL MOTOCENTER' },
+  '58021497000104': { id: '515958', nome: 'IPOJUCA', chave: 'IPOJUCA' },
+  '61065883000102': { id: '516343', nome: 'MOTONOW ESCADA', chave: 'MOTONOW_ESCADA' },
+  '62230241000184': { id: '552162', nome: 'RIBEIRAO', chave: 'RIBEIRAO' },
+  '62619032000127': { id: '554577', nome: 'LITORAL MOTOCENTER', chave: 'LITORAL_MOTOCENTER' },
 };
 function normalizarCNPJ(s) { return String(s || '').replace(/\D/g, ''); }
 function lojaPorCNPJ(cnpjEmpresa) {
   return LOJAS_POR_CNPJ[normalizarCNPJ(cnpjEmpresa)] || null;
+}
+
+function credenciaisPorLoja(loja) {
+  const chave = loja?.chave;
+  const accessToken = (chave && process.env['GC_ACCESS_TOKEN_' + chave]) || process.env.GC_ACCESS_TOKEN;
+  const secretToken = (chave && process.env['GC_SECRET_TOKEN_' + chave]) || process.env.GC_SECRET_TOKEN;
+  return { accessToken, secretToken };
+}
+
+function headers(credenciais) {
+  const accessToken = credenciais?.accessToken || process.env.GC_ACCESS_TOKEN;
+  const secretToken = credenciais?.secretToken || process.env.GC_SECRET_TOKEN;
+  return {
+    'access-token': accessToken,
+    'secret-access-token': secretToken,
+    'Content-Type': 'application/json',
+  };
+}
+
+async function gcGet(path, params = {}, credenciais) {
+  const h = headers(credenciais);
+  if (!h['access-token'] || !h['secret-access-token']) {
+    throw new Error('Tokens do GestãoClick não configurados neste ambiente/loja');
+  }
+  const url = new URL(path, BASE);
+  Object.entries(params).forEach(([k, v]) => url.searchParams.set(k, v));
+  const res = await fetch(url, { headers: h });
+  const text = await res.text();
+  let json;
+  try { json = JSON.parse(text); } catch { json = text; }
+  return { status: res.status, json };
+}
+
+async function gcPost(path, body, credenciais) {
+  const h = headers(credenciais);
+  if (!h['access-token'] || !h['secret-access-token']) {
+    throw new Error('Tokens do GestãoClick não configurados neste ambiente/loja');
+  }
+  const url = new URL(path, BASE);
+  const res = await fetch(url, { method: 'POST', headers: h, body: JSON.stringify(body) });
+  const text = await res.text();
+  let json;
+  try { json = JSON.parse(text); } catch { json = text; }
+  return { status: res.status, json };
 }
 
 // Confirmado com a diretoria: venda de moto é sempre PIX à vista.
@@ -57,15 +72,15 @@ const PLANO_CONTAS_VENDA_MOTO = { id: '32200746', nome: 'Vendas de produtos' };
 // não contribuinte (tipo_contribuinte = '9' no cadastro de cliente do GestãoClick).
 const TIPO_CONTRIBUINTE_PADRAO = '9';
 
-async function buscarClientePorCPF(cpf) {
+async function buscarClientePorCPF(cpf, credenciais) {
   if (!cpf) return null;
-  const r = await gcGet('/clientes', { cpf_cnpj: cpf });
+  const r = await gcGet('/clientes', { cpf_cnpj: cpf }, credenciais);
   return (r.json?.data || [])[0] || null;
 }
 
-async function buscarProdutoPorChassi(chassi) {
+async function buscarProdutoPorChassi(chassi, credenciais) {
   if (!chassi) return null;
-  const r = await gcGet('/produtos', { codigo: chassi });
+  const r = await gcGet('/produtos', { codigo: chassi }, credenciais);
   return (r.json?.data || [])[0] || null;
 }
 
@@ -131,20 +146,20 @@ function montarPayloadCliente(vendaMotos) {
   };
 }
 
-async function criarCliente(payload) {
-  const r = await gcPost('/clientes', payload);
+async function criarCliente(payload, credenciais) {
+  const r = await gcPost('/clientes', payload, credenciais);
   if (r.status < 200 || r.status >= 300) throw new Error(`GestãoClick recusou criar cliente (${r.status}): ${JSON.stringify(r.json)}`);
   return r.json?.data || r.json;
 }
 
-async function criarVenda(payload) {
-  const r = await gcPost('/vendas', payload);
+async function criarVenda(payload, credenciais) {
+  const r = await gcPost('/vendas', payload, credenciais);
   if (r.status < 200 || r.status >= 300) throw new Error(`GestãoClick recusou criar venda (${r.status}): ${JSON.stringify(r.json)}`);
   return r.json?.data || r.json;
 }
 
 module.exports = {
-  gcGet, gcPost, lojaPorCNPJ,
+  gcGet, gcPost, lojaPorCNPJ, credenciaisPorLoja,
   FORMA_PAGAMENTO_PADRAO, CONDICAO_PAGAMENTO_PADRAO, PLANO_CONTAS_VENDA_MOTO,
   TIPO_CONTRIBUINTE_PADRAO, SITUACAO_CONCRETIZADA_ID,
   buscarClientePorCPF, buscarProdutoPorChassi, montarPayloadVenda, montarPayloadCliente,

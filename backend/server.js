@@ -5,7 +5,7 @@ const jwt     = require('jsonwebtoken');
 const bcrypt  = require('bcryptjs');
 const db      = require('./db');
 const { isRepasseObrigatorio, getRepasse, calcularComissao, calcularValorLiquido, calcularComissaoComExcedente } = require('./helpers');
-const { gcGet, lojaPorCNPJ, buscarClientePorCPF, buscarProdutoPorChassi, montarPayloadVenda, montarPayloadCliente, criarCliente, criarVenda } = require('./gestaoclick');
+const { gcGet, lojaPorCNPJ, credenciaisPorLoja, buscarClientePorCPF, buscarProdutoPorChassi, montarPayloadVenda, montarPayloadCliente, criarCliente, criarVenda } = require('./gestaoclick');
 
 const app = express();
 const JWT  = process.env.JWT_SECRET || 'motonow_secret_2024';
@@ -46,7 +46,9 @@ app.get('/health', (_, res) => res.json({ ok: true }));
 // real dos dados do GestãoClick antes de implementar a integração de verdade.
 app.get('/gc/probe/:recurso', auth, adminOnly, async (req, res) => {
   try {
-    const r = await gcGet('/' + req.params.recurso, { limite: req.query.limite || 2 });
+    const loja = req.query.cnpj ? lojaPorCNPJ(req.query.cnpj) : null;
+    const credenciais = credenciaisPorLoja(loja);
+    const r = await gcGet('/' + req.params.recurso, { limite: req.query.limite || 2 }, credenciais);
     res.status(r.status).json(r.json);
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
@@ -61,8 +63,9 @@ app.get('/gc/vendas-motos/:id/preview', auth, adminOnly, async (req, res) => {
     if (!venda) return res.status(404).json({ error: 'Venda não encontrada' });
 
     const loja = lojaPorCNPJ(venda.cnpj_empresa);
-    const cliente = await buscarClientePorCPF(venda.cpf);
-    const produto = await buscarProdutoPorChassi(venda.chassi);
+    const credenciais = credenciaisPorLoja(loja);
+    const cliente = await buscarClientePorCPF(venda.cpf, credenciais);
+    const produto = await buscarProdutoPorChassi(venda.chassi, credenciais);
     const situacaoId = req.query.situacao_id || '(definir)';
     const payload = montarPayloadVenda(venda, { cliente, produto, loja, situacaoId });
 
@@ -95,19 +98,20 @@ app.post('/gc/vendas-motos/:id/criar', auth, adminOnly, async (req, res) => {
 
     const loja = lojaPorCNPJ(venda.cnpj_empresa);
     if (!loja) return res.status(400).json({ error: 'CNPJ da venda não bate com nenhuma loja cadastrada' });
+    const credenciais = credenciaisPorLoja(loja);
 
-    const produto = await buscarProdutoPorChassi(venda.chassi);
+    const produto = await buscarProdutoPorChassi(venda.chassi, credenciais);
     if (!produto) return res.status(400).json({ error: 'Produto (moto) não encontrado no GestãoClick por esse chassi — cadastre lá antes' });
 
-    let cliente = await buscarClientePorCPF(venda.cpf);
+    let cliente = await buscarClientePorCPF(venda.cpf, credenciais);
     let clienteCriado = false;
     if (!cliente) {
-      cliente = await criarCliente(montarPayloadCliente(venda));
+      cliente = await criarCliente(montarPayloadCliente(venda), credenciais);
       clienteCriado = true;
     }
 
     const payload = montarPayloadVenda(venda, { cliente, produto, loja, situacaoId: situacao_id });
-    const vendaCriada = await criarVenda(payload);
+    const vendaCriada = await criarVenda(payload, credenciais);
 
     await registrarLog(req, 'GC_CRIAR_VENDA', 'vendas_motos', String(venda.id), `Venda criada no GestãoClick (id ${vendaCriada?.id || '?'})${clienteCriado ? ', cliente também criado' : ''}`);
     res.json({ cliente_criado: clienteCriado, cliente, venda_criada: vendaCriada });
