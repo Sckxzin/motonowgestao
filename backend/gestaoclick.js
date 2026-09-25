@@ -57,20 +57,28 @@ async function buscarProdutoPorChassi(chassi) {
   return (r.json?.data || [])[0] || null;
 }
 
+// O pg devolve colunas TIMESTAMPTZ como objeto Date, não string.
+function dataISO(v) {
+  if (!v) return '';
+  const d = v instanceof Date ? v : new Date(v);
+  return isNaN(d) ? '' : d.toISOString().slice(0, 10);
+}
+
 // Monta o payload de criar venda a partir de uma venda de moto do MotoNow,
 // seguindo o FORMATO DE LEITURA (GET /vendas) — o GestãoClick avisa que o
 // formato de escrita às vezes difere, então isso é um RASCUNHO pra revisar
 // antes de mandar de verdade, não algo já validado contra a API.
 function montarPayloadVenda(vendaMotos, { cliente, produto, loja }) {
   const variacao = produto?.variacoes?.[0]?.variacao;
+  const data = dataISO(vendaMotos.data_venda || vendaMotos.created_at);
   return {
     cliente_id: cliente?.id || null,
     loja_id: loja?.id || null,
-    data: (vendaMotos.data_venda || vendaMotos.created_at || '').slice(0, 10),
+    data,
     condicao_pagamento: CONDICAO_PAGAMENTO_PADRAO,
     pagamentos: [{
       pagamento: {
-        data_vencimento: (vendaMotos.data_venda || vendaMotos.created_at || '').slice(0, 10),
+        data_vencimento: data,
         valor: Number(vendaMotos.valor || 0).toFixed(2),
         forma_pagamento_id: FORMA_PAGAMENTO_PADRAO.id,
         plano_contas_id: PLANO_CONTAS_VENDA_MOTO.id,
