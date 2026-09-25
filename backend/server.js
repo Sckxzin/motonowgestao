@@ -768,6 +768,9 @@ app.get('/admin/ranking', auth, adminOnly, async (_, res) => {
 });
 
 ;(async()=>{ try {
+  await db.ready; // espera as tabelas base (db.js) existirem antes de migrar/referenciar via FK
+  await db.run(`CREATE TABLE IF NOT EXISTS comissoes (id SERIAL PRIMARY KEY, modelo TEXT NOT NULL UNIQUE, v30 REAL NOT NULL DEFAULT 0, v50 REAL NOT NULL DEFAULT 0, v100 REAL NOT NULL DEFAULT 0, created_at TIMESTAMPTZ DEFAULT NOW())`);
+  await db.run(`CREATE TABLE IF NOT EXISTS metas (id SERIAL PRIMARY KEY, filial TEXT NOT NULL, mes INTEGER NOT NULL, ano INTEGER NOT NULL, meta_motos INTEGER NOT NULL DEFAULT 0, meta_valor REAL NOT NULL DEFAULT 0, UNIQUE(filial,mes,ano))`);
   await db.run(`CREATE TABLE IF NOT EXISTS os_checklist (id SERIAL PRIMARY KEY, os_id INTEGER NOT NULL REFERENCES ordens_servico(id) ON DELETE CASCADE, item TEXT NOT NULL, status TEXT NOT NULL DEFAULT 'OK', observacao TEXT)`);
   await db.run(`CREATE TABLE IF NOT EXISTS os_orcamento (id SERIAL PRIMARY KEY, os_id INTEGER NOT NULL REFERENCES ordens_servico(id) ON DELETE CASCADE, aprovado INTEGER NOT NULL DEFAULT 0, aprovado_em TIMESTAMPTZ, observacao TEXT)`);
   await db.run(`CREATE TABLE IF NOT EXISTS reciclagem (id SERIAL PRIMARY KEY, tipo TEXT NOT NULL DEFAULT 'FERRO', descricao TEXT, valor REAL NOT NULL DEFAULT 0, data TEXT NOT NULL, observacao TEXT, created_by TEXT, created_at TIMESTAMPTZ DEFAULT NOW())`);

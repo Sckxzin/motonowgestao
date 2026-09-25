@@ -75,6 +75,7 @@ async function init() {
       status TEXT NOT NULL DEFAULT 'PENDENTE',
       motivo_recusa TEXT, aprovado_por TEXT,
       aprovado_em TIMESTAMPTZ, data_venda TIMESTAMPTZ,
+      emplacamento REAL DEFAULT 0,
       created_at TIMESTAMPTZ DEFAULT NOW()
     );
     CREATE TABLE IF NOT EXISTS vendas_motos (
@@ -89,6 +90,7 @@ async function init() {
       valor_compra REAL, repasse REAL,
       comissao_valor REAL DEFAULT 0,
       rp INTEGER DEFAULT 0, rr INTEGER DEFAULT 0,
+      emplacamento REAL DEFAULT 0,
       data_venda TIMESTAMPTZ, created_at TIMESTAMPTZ DEFAULT NOW()
     );
     CREATE TABLE IF NOT EXISTS revisoes (
@@ -176,10 +178,6 @@ async function init() {
   console.log('✅ Banco inicializado');
 }
 
-init().catch(e => { console.error('❌ Erro DB:', e.message); process.exit(1); });
+pool.ready = init().catch(e => { console.error('❌ Erro DB:', e.message); process.exit(1); });
 
 module.exports = pool;
-
-// Migração: campo emplacamento nas vendas
-try { db.prepare('ALTER TABLE vendas_motos ADD COLUMN emplacamento INTEGER DEFAULT 0').run(); } catch(e) {}
-try { db.prepare('ALTER TABLE vendas_motos_pendentes ADD COLUMN emplacamento INTEGER DEFAULT 0').run(); } catch(e) {}
