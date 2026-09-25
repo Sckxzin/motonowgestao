@@ -807,7 +807,10 @@ app.get('/admin/ranking', auth, adminOnly, async (_, res) => {
   res.json({ pecas,motos });
 });
 
-;(async()=>{ try {
+// O servidor só começa a aceitar conexões depois que isso terminar (ver app.listen
+// no fim do arquivo) — evita que uma requisição chegue antes de tabelas como
+// "filiais" existirem numa base zerada e derrube o processo inteiro.
+const migracoesProntas = (async () => { try {
   await db.ready; // espera as tabelas base (db.js) existirem antes de migrar/referenciar via FK
   await db.run(`CREATE TABLE IF NOT EXISTS comissoes (id SERIAL PRIMARY KEY, modelo TEXT NOT NULL UNIQUE, v30 REAL NOT NULL DEFAULT 0, v50 REAL NOT NULL DEFAULT 0, v100 REAL NOT NULL DEFAULT 0, created_at TIMESTAMPTZ DEFAULT NOW())`);
   await db.run(`CREATE TABLE IF NOT EXISTS metas (id SERIAL PRIMARY KEY, filial TEXT NOT NULL, mes INTEGER NOT NULL, ano INTEGER NOT NULL, meta_motos INTEGER NOT NULL DEFAULT 0, meta_valor REAL NOT NULL DEFAULT 0, UNIQUE(filial,mes,ano))`);
@@ -849,7 +852,7 @@ app.get('/admin/ranking', auth, adminOnly, async (_, res) => {
     const existe = await db.one('SELECT id FROM pecas WHERE nome=$1 AND cidade=$2 AND tipo_moto IS NOT DISTINCT FROM $3', [p.nome, 'ESCADA', p.tipo_moto]);
     if (!existe) await db.run('INSERT INTO pecas(nome,preco,estoque,cidade,tipo_moto) VALUES($1,0,$2,$3,$4)', [p.nome, p.estoque, 'ESCADA', p.tipo_moto]);
   }
-} catch(e) {} })();
+} catch(e) { console.error('❌ Erro na migração:', e.message); } })();
 
 app.get('/filiais', auth, async (_, res) => {
   res.json(await db.q('SELECT * FROM filiais ORDER BY ativa DESC, nome'));
@@ -1073,4 +1076,6 @@ app.delete('/comissoes/:id', auth, adminOnly, async (req, res) => {
   catch(e) { res.status(500).json({ error:e.message }); }
 });
 
-app.listen(PORT, '0.0.0.0', () => console.log(`\n🚀 MotoNow API — porta ${PORT}`));
+migracoesProntas.then(() => {
+  app.listen(PORT, '0.0.0.0', () => console.log(`\n🚀 MotoNow API — porta ${PORT}`));
+});
