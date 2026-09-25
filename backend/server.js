@@ -83,11 +83,11 @@ app.get('/gc/vendas-motos/:id/preview', auth, adminOnly, async (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 // Cria de verdade cliente (se preciso) e venda no GestãoClick. situacao_id é
-// OBRIGATÓRIO no corpo da requisição — sem isso, erro. Se for a situação
-// "Concretizada" (dispara nota fiscal), também exige forcar:true explícito.
+// OBRIGATÓRIO no corpo da requisição — sem isso, erro. Concretizar não emite
+// nota fiscal sozinho (testado na prática) — "Emitir" é ação manual separada.
 app.post('/gc/vendas-motos/:id/criar', auth, adminOnly, async (req, res) => {
   try {
-    const { situacao_id, forcar } = req.body || {};
+    const { situacao_id } = req.body || {};
     if (!situacao_id) return res.status(400).json({ error: 'situacao_id é obrigatório' });
 
     const venda = await db.one('SELECT * FROM vendas_motos WHERE id=$1', [req.params.id]);
@@ -107,7 +107,7 @@ app.post('/gc/vendas-motos/:id/criar', auth, adminOnly, async (req, res) => {
     }
 
     const payload = montarPayloadVenda(venda, { cliente, produto, loja, situacaoId: situacao_id });
-    const vendaCriada = await criarVenda(payload, { forcar: !!forcar });
+    const vendaCriada = await criarVenda(payload);
 
     await registrarLog(req, 'GC_CRIAR_VENDA', 'vendas_motos', String(venda.id), `Venda criada no GestãoClick (id ${vendaCriada?.id || '?'})${clienteCriado ? ', cliente também criado' : ''}`);
     res.json({ cliente_criado: clienteCriado, cliente, venda_criada: vendaCriada });

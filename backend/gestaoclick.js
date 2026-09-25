@@ -76,10 +76,9 @@ function dataISO(v) {
   return isNaN(d) ? '' : d.toISOString().slice(0, 10);
 }
 
-// Visto em GET /vendas: toda venda "Concretizada" já tem nota fiscal associada
-// (coluna NF-e preenchida em 100% das concretizadas na listagem do GestãoClick).
-// Criar a venda com essa situação é tratado como risco fiscal — bloqueado por
-// padrão em criarVenda(), só passa com forcar=true.
+// Testado na prática em 2026-09-25: criar/concretizar uma venda NÃO emite nota
+// fiscal sozinho — "Emitir" é uma ação manual separada, no menu de ações da
+// venda. Então não tem problema criar a venda já como "Concretizada".
 const SITUACAO_CONCRETIZADA_ID = '8245780';
 
 // Monta o payload de criar venda a partir de uma venda de moto do MotoNow,
@@ -138,13 +137,7 @@ async function criarCliente(payload) {
   return r.json?.data || r.json;
 }
 
-// forcar=true é a única forma de mandar situacaoId === SITUACAO_CONCRETIZADA_ID.
-// Sem isso, lança erro e não chama a API — bloqueio pensado especificamente pra
-// não gerar nota fiscal sem intenção explícita de quem está chamando.
-async function criarVenda(payload, { forcar = false } = {}) {
-  if (payload.situacao_id === SITUACAO_CONCRETIZADA_ID && !forcar) {
-    throw new Error('Bloqueado: essa situação (Concretizada) dispara nota fiscal automaticamente. Passe forcar=true se isso for intencional.');
-  }
+async function criarVenda(payload) {
   const r = await gcPost('/vendas', payload);
   if (r.status < 200 || r.status >= 300) throw new Error(`GestãoClick recusou criar venda (${r.status}): ${JSON.stringify(r.json)}`);
   return r.json?.data || r.json;
