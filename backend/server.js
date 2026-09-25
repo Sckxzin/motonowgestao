@@ -5,7 +5,7 @@ const jwt     = require('jsonwebtoken');
 const bcrypt  = require('bcryptjs');
 const db      = require('./db');
 const { isRepasseObrigatorio, getRepasse, calcularComissao, calcularValorLiquido, calcularComissaoComExcedente } = require('./helpers');
-const { gcGet } = require('./gestaoclick');
+const { gcGet, lojaPorCNPJ } = require('./gestaoclick');
 
 const app = express();
 const JWT  = process.env.JWT_SECRET || 'motonow_secret_2024';
@@ -49,6 +49,9 @@ app.get('/gc/probe/:recurso', auth, adminOnly, async (req, res) => {
     const r = await gcGet('/' + req.params.recurso, { limite: req.query.limite || 2 });
     res.status(r.status).json(r.json);
   } catch (e) { res.status(500).json({ error: e.message }); }
+});
+app.get('/gc/loja-por-cnpj/:cnpj', auth, adminOnly, (req, res) => {
+  res.json({ cnpj: req.params.cnpj, loja: lojaPorCNPJ(req.params.cnpj) });
 });
 
 app.post('/login', async (req, res) => {
