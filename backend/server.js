@@ -824,6 +824,8 @@ const migracoesProntas = (async () => { try {
   await db.run(`ALTER TABLE vendas_motos_pendentes ADD COLUMN IF NOT EXISTS entrega_valor REAL NOT NULL DEFAULT 0`);
   await db.run(`ALTER TABLE vendas_motos ADD COLUMN IF NOT EXISTS entrega_km REAL`);
   await db.run(`ALTER TABLE vendas_motos ADD COLUMN IF NOT EXISTS entrega_valor REAL NOT NULL DEFAULT 0`);
+  await db.run(`ALTER TABLE vendas_motos_pendentes ADD COLUMN IF NOT EXISTS emplacamento REAL DEFAULT 0`);
+  await db.run(`ALTER TABLE vendas_motos ADD COLUMN IF NOT EXISTS emplacamento REAL DEFAULT 0`);
   await db.run(`ALTER TABLE vendas_motos_pendentes ALTER COLUMN emplacamento TYPE REAL USING emplacamento::real`);
   await db.run(`ALTER TABLE vendas_motos ALTER COLUMN emplacamento TYPE REAL USING emplacamento::real`);
   await db.run(`CREATE TABLE IF NOT EXISTS filiais (id SERIAL PRIMARY KEY, nome TEXT NOT NULL UNIQUE, ativa INTEGER NOT NULL DEFAULT 1, created_at TIMESTAMPTZ DEFAULT NOW())`);
