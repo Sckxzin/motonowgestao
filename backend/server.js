@@ -5,6 +5,7 @@ const jwt     = require('jsonwebtoken');
 const bcrypt  = require('bcryptjs');
 const db      = require('./db');
 const { isRepasseObrigatorio, getRepasse, calcularComissao, calcularValorLiquido, calcularComissaoComExcedente } = require('./helpers');
+const { gcGet } = require('./gestaoclick');
 
 const app = express();
 const JWT  = process.env.JWT_SECRET || 'motonow_secret_2024';
@@ -39,6 +40,16 @@ async function registrarLog(req, acao, entidade, entidade_id, descricao) {
 }
 
 app.get('/health', (_, res) => res.json({ ok: true }));
+
+// Endpoint temporário de teste — só leitura, só diretoria, só funciona se GC_ACCESS_TOKEN/GC_SECRET_TOKEN
+// estiverem configurados (produção não tem, então fica inofensivo por lá). Usado pra descobrir o formato
+// real dos dados do GestãoClick antes de implementar a integração de verdade.
+app.get('/gc/probe/:recurso', auth, adminOnly, async (req, res) => {
+  try {
+    const r = await gcGet('/' + req.params.recurso, { limite: req.query.limite || 2 });
+    res.status(r.status).json(r.json);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
 
 app.post('/login', async (req, res) => {
   const { username, password } = req.body;
