@@ -35,4 +35,18 @@ function lojaPorCNPJ(cnpjEmpresa) {
   return LOJAS_POR_CNPJ[normalizarCNPJ(cnpjEmpresa)] || null;
 }
 
-module.exports = { gcGet, lojaPorCNPJ };
+// Confirmado com a diretoria: venda de moto é sempre PIX à vista.
+// forma_pagamento_id e plano_contas_id vistos numa venda real via GET /vendas.
+const FORMA_PAGAMENTO_PADRAO = { id: '5885248', nome: 'PIX' };
+const CONDICAO_PAGAMENTO_PADRAO = 'a_vista';
+const PLANO_CONTAS_VENDA_MOTO = { id: '32200746', nome: 'Vendas de produtos' };
+
+// Toda venda feita pelo MotoNow é de motocicleta pra cliente pessoa física
+// não contribuinte (tipo_contribuinte = '9' no cadastro de cliente do GestãoClick).
+const TIPO_CONTRIBUINTE_PADRAO = '9';
+
+module.exports = {
+  gcGet, lojaPorCNPJ,
+  FORMA_PAGAMENTO_PADRAO, CONDICAO_PAGAMENTO_PADRAO, PLANO_CONTAS_VENDA_MOTO,
+  TIPO_CONTRIBUINTE_PADRAO,
+};
