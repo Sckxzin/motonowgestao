@@ -21,4 +21,18 @@ async function gcGet(path, params = {}) {
   return { status: res.status, json };
 }
 
-module.exports = { gcGet };
+// Cada moto/venda carrega seu próprio "CNPJ empresa" (texto livre). O GestãoClick
+// não tem uma loja por filial — só uma loja por CNPJ/empresa. Mapeamento fixo,
+// confirmado com a diretoria em 2026-09-25.
+const LOJAS_POR_CNPJ = {
+  '58021497000104': { id: '515958', nome: 'IPOJUCA' },
+  '61065883000102': { id: '516343', nome: 'MOTONOW ESCADA' },
+  '62230241000184': { id: '552162', nome: 'RIBEIRAO' },
+  '62619032000127': { id: '554577', nome: 'LITORAL MOTOCENTER' },
+};
+function normalizarCNPJ(s) { return String(s || '').replace(/\D/g, ''); }
+function lojaPorCNPJ(cnpjEmpresa) {
+  return LOJAS_POR_CNPJ[normalizarCNPJ(cnpjEmpresa)] || null;
+}
+
+module.exports = { gcGet, lojaPorCNPJ };
