@@ -5,7 +5,7 @@ const jwt     = require('jsonwebtoken');
 const bcrypt  = require('bcryptjs');
 const db      = require('./db');
 const { isRepasseObrigatorio, getRepasse, calcularComissao, calcularValorLiquido, calcularComissaoComExcedente } = require('./helpers');
-const { gcGet, lojaPorCNPJ } = require('./gestaoclick');
+const { gcGet, lojaPorCNPJ, buscarClientePorCPF, buscarProdutoPorChassi, montarPayloadVenda } = require('./gestaoclick');
 
 const app = express();
 const JWT  = process.env.JWT_SECRET || 'motonow_secret_2024';
@@ -52,6 +52,32 @@ app.get('/gc/probe/:recurso', auth, adminOnly, async (req, res) => {
 });
 app.get('/gc/loja-por-cnpj/:cnpj', auth, adminOnly, (req, res) => {
   res.json({ cnpj: req.params.cnpj, loja: lojaPorCNPJ(req.params.cnpj) });
+});
+// Monta (mas NUNCA envia) o payload de criar venda no GestãoClick pra uma venda
+// de moto já registrada no MotoNow. Só leitura — não cria nada por lá.
+app.get('/gc/vendas-motos/:id/preview', auth, adminOnly, async (req, res) => {
+  try {
+    const venda = await db.one('SELECT * FROM vendas_motos WHERE id=$1', [req.params.id]);
+    if (!venda) return res.status(404).json({ error: 'Venda não encontrada' });
+
+    const loja = lojaPorCNPJ(venda.cnpj_empresa);
+    const cliente = await buscarClientePorCPF(venda.cpf);
+    const produto = await buscarProdutoPorChassi(venda.chassi);
+    const payload = montarPayloadVenda(venda, { cliente, produto, loja });
+
+    res.json({
+      venda_motonow: { id: venda.id, cliente: venda.nome_cliente, cpf: venda.cpf, chassi: venda.chassi, cnpj_empresa: venda.cnpj_empresa, valor: venda.valor },
+      loja_encontrada: loja,
+      cliente_encontrado: cliente ? { id: cliente.id, nome: cliente.nome, cpf: cliente.cpf } : null,
+      produto_encontrado: produto ? { id: produto.id, nome: produto.nome, codigo_interno: produto.codigo_interno } : null,
+      payload_rascunho: payload,
+      avisos: [
+        !loja && 'CNPJ da venda não bate com nenhuma das 4 lojas cadastradas.',
+        !cliente && 'Cliente não encontrado no GestãoClick por esse CPF — precisaria ser criado antes.',
+        !produto && 'Produto (moto) não encontrado no GestãoClick por esse chassi.',
+      ].filter(Boolean),
+    });
+  } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
 app.post('/login', async (req, res) => {

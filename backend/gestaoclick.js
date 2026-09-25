@@ -45,8 +45,52 @@ const PLANO_CONTAS_VENDA_MOTO = { id: '32200746', nome: 'Vendas de produtos' };
 // não contribuinte (tipo_contribuinte = '9' no cadastro de cliente do GestãoClick).
 const TIPO_CONTRIBUINTE_PADRAO = '9';
 
+async function buscarClientePorCPF(cpf) {
+  if (!cpf) return null;
+  const r = await gcGet('/clientes', { cpf_cnpj: cpf });
+  return (r.json?.data || [])[0] || null;
+}
+
+async function buscarProdutoPorChassi(chassi) {
+  if (!chassi) return null;
+  const r = await gcGet('/produtos', { codigo: chassi });
+  return (r.json?.data || [])[0] || null;
+}
+
+// Monta o payload de criar venda a partir de uma venda de moto do MotoNow,
+// seguindo o FORMATO DE LEITURA (GET /vendas) — o GestãoClick avisa que o
+// formato de escrita às vezes difere, então isso é um RASCUNHO pra revisar
+// antes de mandar de verdade, não algo já validado contra a API.
+function montarPayloadVenda(vendaMotos, { cliente, produto, loja }) {
+  const variacao = produto?.variacoes?.[0]?.variacao;
+  return {
+    cliente_id: cliente?.id || null,
+    loja_id: loja?.id || null,
+    data: (vendaMotos.data_venda || vendaMotos.created_at || '').slice(0, 10),
+    condicao_pagamento: CONDICAO_PAGAMENTO_PADRAO,
+    pagamentos: [{
+      pagamento: {
+        data_vencimento: (vendaMotos.data_venda || vendaMotos.created_at || '').slice(0, 10),
+        valor: Number(vendaMotos.valor || 0).toFixed(2),
+        forma_pagamento_id: FORMA_PAGAMENTO_PADRAO.id,
+        plano_contas_id: PLANO_CONTAS_VENDA_MOTO.id,
+      },
+    }],
+    produtos: [{
+      produto: {
+        produto_id: produto?.id || null,
+        variacao_id: variacao?.id || null,
+        quantidade: '1.00',
+        valor_venda: Number(vendaMotos.valor || 0).toFixed(2),
+        valor_total: Number(vendaMotos.valor || 0).toFixed(2),
+      },
+    }],
+  };
+}
+
 module.exports = {
   gcGet, lojaPorCNPJ,
   FORMA_PAGAMENTO_PADRAO, CONDICAO_PAGAMENTO_PADRAO, PLANO_CONTAS_VENDA_MOTO,
   TIPO_CONTRIBUINTE_PADRAO,
+  buscarClientePorCPF, buscarProdutoPorChassi, montarPayloadVenda,
 };
