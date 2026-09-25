@@ -5,7 +5,7 @@ const jwt     = require('jsonwebtoken');
 const bcrypt  = require('bcryptjs');
 const db      = require('./db');
 const { isRepasseObrigatorio, getRepasse, calcularComissao, calcularValorLiquido, calcularComissaoComExcedente } = require('./helpers');
-const { gcGet, lojaPorCNPJ, buscarClientePorCPF, buscarProdutoPorChassi, montarPayloadVenda } = require('./gestaoclick');
+const { gcGet, lojaPorCNPJ, buscarClientePorCPF, buscarProdutoPorChassi, montarPayloadVenda, montarPayloadCliente } = require('./gestaoclick');
 
 const app = express();
 const JWT  = process.env.JWT_SECRET || 'motonow_secret_2024';
@@ -71,9 +71,10 @@ app.get('/gc/vendas-motos/:id/preview', auth, adminOnly, async (req, res) => {
       cliente_encontrado: cliente ? { id: cliente.id, nome: cliente.nome, cpf: cliente.cpf } : null,
       produto_encontrado: produto ? { id: produto.id, nome: produto.nome, codigo_interno: produto.codigo_interno } : null,
       payload_rascunho: payload,
+      payload_criar_cliente_rascunho: cliente ? null : montarPayloadCliente(venda),
       avisos: [
         !loja && 'CNPJ da venda não bate com nenhuma das 4 lojas cadastradas.',
-        !cliente && 'Cliente não encontrado no GestãoClick por esse CPF — precisaria ser criado antes.',
+        !cliente && 'Cliente não encontrado no GestãoClick por esse CPF — precisaria ser criado antes (ver payload_criar_cliente_rascunho, ainda não confirmado contra a API).',
         !produto && 'Produto (moto) não encontrado no GestãoClick por esse chassi.',
       ].filter(Boolean),
     });

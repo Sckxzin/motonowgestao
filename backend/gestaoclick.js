@@ -96,9 +96,23 @@ function montarPayloadVenda(vendaMotos, { cliente, produto, loja }) {
   };
 }
 
+// RASCUNHO — não confirmado contra a API ainda. A documentação avisa que no
+// cliente PF os campos de escrita usam prefixo (pf_cpf, pf_rg, pf_data_nascimento,
+// pf_sexo) mesmo saindo sem prefixo na leitura (cpf, rg, ...). "nome" não tem
+// prefixo em nenhum dos dois lados.
+function montarPayloadCliente(vendaMotos) {
+  return {
+    tipo_pessoa: 'PF',
+    nome: vendaMotos.nome_cliente || null,
+    pf_cpf: vendaMotos.cpf || null,
+    telefone: vendaMotos.telefone || vendaMotos.numero_cliente || null,
+    tipo_contribuinte: TIPO_CONTRIBUINTE_PADRAO,
+  };
+}
+
 module.exports = {
   gcGet, lojaPorCNPJ,
   FORMA_PAGAMENTO_PADRAO, CONDICAO_PAGAMENTO_PADRAO, PLANO_CONTAS_VENDA_MOTO,
   TIPO_CONTRIBUINTE_PADRAO,
-  buscarClientePorCPF, buscarProdutoPorChassi, montarPayloadVenda,
+  buscarClientePorCPF, buscarProdutoPorChassi, montarPayloadVenda, montarPayloadCliente,
 };
