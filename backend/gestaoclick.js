@@ -21,6 +21,18 @@ async function gcGet(path, params = {}) {
   return { status: res.status, json };
 }
 
+async function gcPost(path, body) {
+  if (!process.env.GC_ACCESS_TOKEN || !process.env.GC_SECRET_TOKEN) {
+    throw new Error('GC_ACCESS_TOKEN/GC_SECRET_TOKEN não configurados neste ambiente');
+  }
+  const url = new URL(path, BASE);
+  const res = await fetch(url, { method: 'POST', headers: headers(), body: JSON.stringify(body) });
+  const text = await res.text();
+  let json;
+  try { json = JSON.parse(text); } catch { json = text; }
+  return { status: res.status, json };
+}
+
 // Cada moto/venda carrega seu próprio "CNPJ empresa" (texto livre). O GestãoClick
 // não tem uma loja por filial — só uma loja por CNPJ/empresa. Mapeamento fixo,
 // confirmado com a diretoria em 2026-09-25.
@@ -64,16 +76,26 @@ function dataISO(v) {
   return isNaN(d) ? '' : d.toISOString().slice(0, 10);
 }
 
+// Visto em GET /vendas: toda venda "Concretizada" já tem nota fiscal associada
+// (coluna NF-e preenchida em 100% das concretizadas na listagem do GestãoClick).
+// Criar a venda com essa situação é tratado como risco fiscal — bloqueado por
+// padrão em criarVenda(), só passa com forcar=true.
+const SITUACAO_CONCRETIZADA_ID = '8245780';
+
 // Monta o payload de criar venda a partir de uma venda de moto do MotoNow,
 // seguindo o FORMATO DE LEITURA (GET /vendas) — o GestãoClick avisa que o
 // formato de escrita às vezes difere, então isso é um RASCUNHO pra revisar
 // antes de mandar de verdade, não algo já validado contra a API.
-function montarPayloadVenda(vendaMotos, { cliente, produto, loja }) {
+// situacaoId é OBRIGATÓRIO — sem valor padrão de propósito, pra nunca cair
+// sozinho numa situação que dispare nota fiscal sem ninguém escolher isso.
+function montarPayloadVenda(vendaMotos, { cliente, produto, loja, situacaoId }) {
+  if (!situacaoId) throw new Error('situacaoId é obrigatório pra montar o payload de venda');
   const variacao = produto?.variacoes?.[0]?.variacao;
   const data = dataISO(vendaMotos.data_venda || vendaMotos.created_at);
   return {
     cliente_id: cliente?.id || null,
     loja_id: loja?.id || null,
+    situacao_id: situacaoId,
     data,
     condicao_pagamento: CONDICAO_PAGAMENTO_PADRAO,
     pagamentos: [{
@@ -110,9 +132,28 @@ function montarPayloadCliente(vendaMotos) {
   };
 }
 
+async function criarCliente(payload) {
+  const r = await gcPost('/clientes', payload);
+  if (r.status < 200 || r.status >= 300) throw new Error(`GestãoClick recusou criar cliente (${r.status}): ${JSON.stringify(r.json)}`);
+  return r.json?.data || r.json;
+}
+
+// forcar=true é a única forma de mandar situacaoId === SITUACAO_CONCRETIZADA_ID.
+// Sem isso, lança erro e não chama a API — bloqueio pensado especificamente pra
+// não gerar nota fiscal sem intenção explícita de quem está chamando.
+async function criarVenda(payload, { forcar = false } = {}) {
+  if (payload.situacao_id === SITUACAO_CONCRETIZADA_ID && !forcar) {
+    throw new Error('Bloqueado: essa situação (Concretizada) dispara nota fiscal automaticamente. Passe forcar=true se isso for intencional.');
+  }
+  const r = await gcPost('/vendas', payload);
+  if (r.status < 200 || r.status >= 300) throw new Error(`GestãoClick recusou criar venda (${r.status}): ${JSON.stringify(r.json)}`);
+  return r.json?.data || r.json;
+}
+
 module.exports = {
-  gcGet, lojaPorCNPJ,
+  gcGet, gcPost, lojaPorCNPJ,
   FORMA_PAGAMENTO_PADRAO, CONDICAO_PAGAMENTO_PADRAO, PLANO_CONTAS_VENDA_MOTO,
-  TIPO_CONTRIBUINTE_PADRAO,
+  TIPO_CONTRIBUINTE_PADRAO, SITUACAO_CONCRETIZADA_ID,
   buscarClientePorCPF, buscarProdutoPorChassi, montarPayloadVenda, montarPayloadCliente,
+  criarCliente, criarVenda,
 };
