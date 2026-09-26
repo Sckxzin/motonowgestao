@@ -5,7 +5,7 @@ const jwt     = require('jsonwebtoken');
 const bcrypt  = require('bcryptjs');
 const db      = require('./db');
 const { isRepasseObrigatorio, getRepasse, calcularComissao, calcularValorLiquido, calcularComissaoComExcedente } = require('./helpers');
-const { gcGet, lojaPorCNPJ, credenciaisPorLoja, buscarClientePorCPF, buscarProdutoPorChassi, montarPayloadVenda, montarPayloadCliente, criarCliente, criarVenda } = require('./gestaoclick');
+const { gcGet, lojaPorCNPJ, credenciaisPorLoja, buscarClientePorCPF, buscarProdutoPorChassi, montarPayloadVenda, montarPayloadCliente, criarCliente, criarVenda, SITUACAO_CONCRETIZADA_ID } = require('./gestaoclick');
 
 const app = express();
 const JWT  = process.env.JWT_SECRET || 'motonow_secret_2024';
@@ -475,6 +475,37 @@ app.get('/pendentes', auth, adminOnly, async (_, res) => {
 });
 app.post('/pendentes/:id/aprovar', auth, adminOnly, async (req, res) => {
   const { entrega_valor, emplacamento } = req.body;
+
+  // Antes de aprovar de verdade no MotoNow, tenta mandar a venda pro GestãoClick
+  // (só quando a loja daquele CNPJ tem token configurado neste ambiente — senão
+  // segue o fluxo antigo, sem GestãoClick). Se essa etapa falhar, a aprovação
+  // não acontece: fica pendente até alguém resolver o problema lá.
+  let gcResultado = null;
+  try {
+    const pendente = await db.one('SELECT * FROM vendas_motos_pendentes WHERE id=$1', [req.params.id]);
+    if (!pendente || pendente.status !== 'PENDENTE') return res.status(400).json({ error: 'Pendência não encontrada' });
+
+    const loja = lojaPorCNPJ(pendente.cnpj_empresa);
+    const credenciais = loja ? credenciaisPorLoja(loja) : null;
+    if (loja && credenciais?.accessToken && credenciais?.secretToken) {
+      const produto = await buscarProdutoPorChassi(pendente.chassi, credenciais);
+      if (!produto) throw new Error('Produto (moto) não encontrado no GestãoClick por esse chassi — cadastre lá antes de aprovar');
+
+      let cliente = await buscarClientePorCPF(pendente.cpf, credenciais);
+      let clienteCriado = false;
+      if (!cliente) {
+        cliente = await criarCliente(montarPayloadCliente(pendente), credenciais);
+        clienteCriado = true;
+      }
+
+      const payload = montarPayloadVenda(pendente, { cliente, produto, loja, situacaoId: SITUACAO_CONCRETIZADA_ID });
+      const vendaCriada = await criarVenda(payload, credenciais);
+      gcResultado = { cliente_criado: clienteCriado, cliente, venda_criada: vendaCriada };
+    }
+  } catch (e) {
+    return res.status(400).json({ error: `Falha ao enviar pro GestãoClick — venda NÃO foi aprovada: ${e.message}` });
+  }
+
   const client = await db.connect();
   try {
     await client.query('BEGIN');
@@ -487,10 +518,11 @@ app.post('/pendentes/:id/aprovar', auth, adminOnly, async (req, res) => {
     const comRows = await client.query('SELECT * FROM comissoes WHERE modelo ILIKE $1 LIMIT 1', [p.modelo]);
     const valorLiquido = calcularValorLiquido({ valor:p.valor, brinde:p.brinde, gasolina:p.gasolina, entrega_valor:entregaValor, emplacamento:emplacamentoValor });
     const comissaoFinal = calcularComissaoComExcedente(comRows.rows[0], valorLiquido);
-    await client.query(`INSERT INTO vendas_motos(moto_id,modelo,cor,chassi,filial_origem,filial_venda,nome_cliente,cpf,numero_cliente,valor,forma_pagamento,brinde,gasolina,como_chegou,local_retirada,filial_retirada,santander,cnpj_empresa,valor_compra,repasse,comissao_valor,data_venda,emplacamento,entrega_km,entrega_valor) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25)`,
+    const novaVenda = (await client.query(`INSERT INTO vendas_motos(moto_id,modelo,cor,chassi,filial_origem,filial_venda,nome_cliente,cpf,numero_cliente,valor,forma_pagamento,brinde,gasolina,como_chegou,local_retirada,filial_retirada,santander,cnpj_empresa,valor_compra,repasse,comissao_valor,data_venda,emplacamento,entrega_km,entrega_valor,gc_venda_id,gc_venda_codigo,gc_cliente_id,gc_enviado_em) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29) RETURNING *`,
       [p.moto_id,p.modelo,p.cor,p.chassi,p.filial_origem,p.filial_venda,p.nome_cliente,p.cpf,p.numero_cliente,p.valor,p.forma_pagamento,p.brinde,p.gasolina,p.como_chegou,p.local_retirada,p.filial_retirada,p.santander,p.cnpj_empresa,p.valor_compra,rep,comissaoFinal,
        p.data_venda||new Date().toISOString().slice(0,10), // ← USA DATA DA VENDA, não NOW()
-       emplacamentoValor,p.entrega_km,entregaValor]);
+       emplacamentoValor,p.entrega_km,entregaValor,
+       gcResultado?.venda_criada?.id||null, gcResultado?.venda_criada?.codigo||null, gcResultado?.cliente?.id||null, gcResultado?new Date():null])).rows[0];
     if (p.brinde) {
       const cap = await client.query("SELECT * FROM pecas WHERE nome ILIKE '%CAPACETE%' AND cidade=$1 AND estoque>0 LIMIT 1", [p.filial_venda]);
       if (!cap.rows[0]) throw new Error('Sem capacete em estoque');
@@ -508,8 +540,8 @@ app.post('/pendentes/:id/aprovar', auth, adminOnly, async (req, res) => {
       ['APROVACAO', '✅ Venda aprovada', `${p.modelo} - ${p.nome_cliente} (${formatBRL(p.valor)})`, p.filial_venda]
     );
     await client.query('COMMIT');
-    await registrarLog(req, 'APROVAR_VENDA', 'vendas_motos', p.id, `${p.modelo} - ${p.nome_cliente}`);
-    res.json({ ok:true });
+    await registrarLog(req, 'APROVAR_VENDA', 'vendas_motos', p.id, `${p.modelo} - ${p.nome_cliente}${gcResultado ? ' (enviada pro GestãoClick #' + (gcResultado.venda_criada?.codigo||'?') + ')' : ''}`);
+    res.json({ ok:true, venda_motos: novaVenda, gestaoclick: gcResultado });
   } catch(e) { await client.query('ROLLBACK'); res.status(400).json({ error:e.message }); }
   finally { client.release(); }
 });

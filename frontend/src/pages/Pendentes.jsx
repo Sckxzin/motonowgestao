@@ -14,6 +14,7 @@ export default function Pendentes() {
   const [motivo, setMotivo] = useState('');
   const [comissoes, setComissoes] = useState([]);
   const [edits, setEdits] = useState({}); // { [pendenciaId]: { entrega_valor, emplacamento } }
+  const [aprovando, setAprovando] = useState(null);
 
   useEffect(() => {
     if (!user) nav('/');
@@ -40,11 +41,14 @@ export default function Pendentes() {
 
   async function aprovar(id) {
     const ed = edits[id] || {};
+    setAprovando(id);
     try {
-      await api.post(`/pendentes/${id}/aprovar`, { entrega_valor:Number(ed.entrega_valor||0), emplacamento:Number(ed.emplacamento||0) });
-      setLista(p=>p.filter(x=>x.id!==id)); show('Venda aprovada!');
+      const r = await api.post(`/pendentes/${id}/aprovar`, { entrega_valor:Number(ed.entrega_valor||0), emplacamento:Number(ed.emplacamento||0) });
+      setLista(p=>p.filter(x=>x.id!==id));
+      show(r.data?.gestaoclick ? `Venda aprovada e enviada pro GestãoClick (venda #${r.data.gestaoclick.venda_criada?.codigo||'?'})!` : 'Venda aprovada!');
     }
     catch(e){ show(String(e),'err'); }
+    finally { setAprovando(null); }
   }
 
   async function recusar() {
@@ -95,8 +99,10 @@ export default function Pendentes() {
                   )}
                 </div>
                 <div style={{display:'flex',gap:8,flexShrink:0}}>
-                  <button className="btn btn-s" onClick={()=>aprovar(p.id)}>✅ Aprovar</button>
-                  <button className="btn btn-g" style={{color:'var(--red)',borderColor:'var(--redbd)'}} onClick={()=>{setRecusando(p.id);setMotivo('')}}>✕ Recusar</button>
+                  <button className="btn btn-s" disabled={aprovando===p.id} onClick={()=>aprovar(p.id)}>
+                    {aprovando===p.id ? <span className="spin" /> : '✅ Aprovar'}
+                  </button>
+                  <button className="btn btn-g" style={{color:'var(--red)',borderColor:'var(--redbd)'}} disabled={aprovando===p.id} onClick={()=>{setRecusando(p.id);setMotivo('')}}>✕ Recusar</button>
                 </div>
               </div>
             </div>
