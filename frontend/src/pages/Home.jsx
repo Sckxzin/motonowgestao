@@ -142,6 +142,18 @@ export default function Home() {
     catch (e) { show(String(e), 'err'); }
   }
 
+  async function buscarCep(cepRaw) {
+    const cep = String(cepRaw||'').replace(/\D/g,'');
+    if (cep.length !== 8) return;
+    try {
+      const r = await fetch(`https://viacep.com.br/ws/${cep}/json/`);
+      const d = await r.json();
+      if (d && !d.erro) {
+        setVf(prev => ({ ...prev, endRua: d.logradouro || prev.endRua, endBairro: d.bairro || prev.endBairro, endCidade: d.localidade || prev.endCidade, endUf: d.uf || prev.endUf }));
+      }
+    } catch {}
+  }
+
   async function buscarCliente(q) {
     if (!q || q.length < 3) { setClienteBuscado(null); return; }
     setBuscandoCliente(true);
@@ -158,7 +170,7 @@ export default function Home() {
   async function venderMoto() {
     if (!vf.clienteNome || !vf.valor || !vf.filialVenda || !vf.numero) { show('Preencha os campos obrigatórios', 'err'); return; }
     try {
-      await api.post('/motos/vender', { moto_id:motoVenda.id, nome_cliente:vf.clienteNome, cpf:vf.cpf||null, numero_cliente:vf.numero, valor:Number(vf.valor), forma_pagamento:vf.pagamento||null, brinde:!!vf.brinde, gasolina:vf.gasolina?Number(vf.gasolina):null, como_chegou:vf.chegou||null, filial_venda:vf.filialVenda, local_retirada:vf.localRet||null, filial_retirada:vf.localRet==='LOJA'?vf.lojaRet:null, emplacamento:!!vf.emplacamento, entrega_km:vf.localRet==='ENTREGA'&&vf.km?Number(vf.km):null });
+      await api.post('/motos/vender', { moto_id:motoVenda.id, nome_cliente:vf.clienteNome, cpf:vf.cpf||null, numero_cliente:vf.numero, valor:Number(vf.valor), forma_pagamento:vf.pagamento||null, brinde:!!vf.brinde, gasolina:vf.gasolina?Number(vf.gasolina):null, como_chegou:vf.chegou||null, filial_venda:vf.filialVenda, local_retirada:vf.localRet||null, filial_retirada:vf.localRet==='LOJA'?vf.lojaRet:null, emplacamento:!!vf.emplacamento, entrega_km:vf.localRet==='ENTREGA'&&vf.km?Number(vf.km):null, end_cep:vf.endCep||null, end_rua:vf.endRua||null, end_numero:vf.endNumero||null, end_complemento:vf.endComplemento||null, end_bairro:vf.endBairro||null, end_cidade:vf.endCidade||null, end_uf:vf.endUf||null });
       setMotoVenda(null); show('Solicitação enviada para aprovação!'); loadMotos();
     } catch (e) { show(String(e), 'err'); }
   }
@@ -475,6 +487,39 @@ export default function Home() {
             <div className="field"><label>CPF</label><input className="inp" placeholder="000.000.000-00" value={vf.cpf||''} onChange={e=>setVf({...vf,cpf:e.target.value})} /></div>
             <div className="field"><label>Valor *</label><input className="inp" type="number" value={vf.valor||''} onChange={e=>setVf({...vf,valor:e.target.value})} /></div>
             <div className="field"><label>Gasolina</label><input className="inp" type="number" value={vf.gasolina||''} onChange={e=>setVf({...vf,gasolina:e.target.value})} /></div>
+          </div>
+          <div className="ibox" style={{marginBottom:12}}>
+            <p style={{marginBottom:8,fontWeight:600,fontSize:13}}>📍 Endereço do cliente</p>
+            <p style={{fontSize:11,color:'var(--tx3)',marginBottom:8,marginTop:-4}}>Preenchendo certinho aqui, já vai pronto pro cadastro do cliente no GestãoClick.</p>
+            <div className="g2" style={{gap:8}}>
+              <div className="field" style={{margin:0}}><label>CEP</label>
+                <input className="inp" placeholder="00000-000" value={vf.endCep||''}
+                  onChange={e=>setVf({...vf,endCep:e.target.value})}
+                  onBlur={e=>buscarCep(e.target.value)} />
+              </div>
+              <div className="field" style={{margin:0}}><label>Número</label>
+                <input className="inp" value={vf.endNumero||''} onChange={e=>setVf({...vf,endNumero:e.target.value})} />
+              </div>
+            </div>
+            <div className="g2" style={{gap:8,marginTop:8}}>
+              <div className="field" style={{margin:0}}><label>Rua</label>
+                <input className="inp" value={vf.endRua||''} onChange={e=>setVf({...vf,endRua:e.target.value})} />
+              </div>
+              <div className="field" style={{margin:0}}><label>Complemento</label>
+                <input className="inp" value={vf.endComplemento||''} onChange={e=>setVf({...vf,endComplemento:e.target.value})} />
+              </div>
+            </div>
+            <div className="g2" style={{gap:8,marginTop:8}}>
+              <div className="field" style={{margin:0}}><label>Bairro</label>
+                <input className="inp" value={vf.endBairro||''} onChange={e=>setVf({...vf,endBairro:e.target.value})} />
+              </div>
+              <div className="field" style={{margin:0}}><label>Cidade</label>
+                <input className="inp" value={vf.endCidade||''} onChange={e=>setVf({...vf,endCidade:e.target.value})} />
+              </div>
+            </div>
+            <div className="field" style={{margin:0,marginTop:8,maxWidth:100}}><label>UF</label>
+              <input className="inp" maxLength={2} style={{textTransform:'uppercase'}} value={vf.endUf||''} onChange={e=>setVf({...vf,endUf:e.target.value.toUpperCase()})} />
+            </div>
           </div>
           <div className="field"><label>Filial da venda *</label>
             <select className="inp" value={vf.filialVenda||''} onChange={e=>setVf({...vf,filialVenda:e.target.value})}>
