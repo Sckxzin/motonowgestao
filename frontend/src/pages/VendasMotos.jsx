@@ -37,7 +37,7 @@ const TODAS_COLUNAS = [
   { key:'comissao_antiga', label:'Comissão (sistema antigo)', fixed:false, w:130 },
   { key:'como_chegou',   label:'Como chegou',   fixed:false, w:110 },
   { key:'emplacamento',  label:'Emplacamento',  fixed:false, w:100 },
-  { key:'acoes',         label:'Ações',         fixed:true,  w:90  },
+  { key:'acoes',         label:'Ações',         fixed:true,  w:180 },
 ];
 
 const COLS_DEFAULT = ['data','modelo','chassi','cliente','cpf','valor','compra','repasse','a_repassar','liquido','filial','empresa','descontos','valor_base','faixa','comissao','rp','acoes'];
@@ -343,7 +343,7 @@ export default function VendasMotos() {
           </div>
         );
       }
-      case 'acoes':       return <div style={{display:'flex',gap:6}}>
+      case 'acoes':       return <div style={{display:'flex',gap:6,alignItems:'center',flexWrap:'wrap'}}>
         <button className="ab" onClick={() => { setEdit(v); setEf({
           modelo:v.modelo||'', cor:v.cor||'', chassi:(v.chassi||'').trim(),
           filial_venda:v.filial_venda||'', filial_origem:v.filial_origem||'',
@@ -356,6 +356,11 @@ export default function VendasMotos() {
           data_venda:v.data_venda?v.data_venda.slice(0,10):''
         }); }}>✏️ Editar</button>
         <button className="ab red" onClick={()=>excluirVenda(v.id)}>🗑</button>
+        {v.gc_venda_id
+          ? <span className="badge b-grn" title="Enviada pro GestãoClick">✓ GC #{v.gc_venda_codigo}</span>
+          : <button className="ab" disabled={enviandoGC===v.id} onClick={()=>enviarParaGestaoClick(v)} title="Enviar cliente e venda pro GestãoClick">
+              {enviandoGC===v.id ? <span className="spin" /> : '📤 GestãoClick'}
+            </button>}
       </div>;
       default: return '';
     }
@@ -407,6 +412,18 @@ export default function VendasMotos() {
       setVendas(v => v.filter(x => x.id !== id));
       show('Venda excluída!');
     } catch(e) { show(String(e),'err'); }
+  }
+
+  const [enviandoGC, setEnviandoGC] = useState(null);
+  async function enviarParaGestaoClick(v) {
+    if (!window.confirm(`Enviar essa venda (${v.modelo}, ${v.nome_cliente}) pro GestãoClick? Cria o cliente (se precisar) e a venda concretizada lá — a nota fiscal continua manual, quem emite é a diretoria depois.`)) return;
+    setEnviandoGC(v.id);
+    try {
+      const r = await api.post(`/gc/vendas-motos/${v.id}/criar`, { situacao_id: '8245780' });
+      setVendas(prev => prev.map(x => x.id===v.id ? { ...x, gc_venda_id:r.data.venda_criada?.id, gc_venda_codigo:r.data.venda_criada?.codigo } : x));
+      show(`Enviada! Venda #${r.data.venda_criada?.codigo} no GestãoClick.`);
+    } catch(e) { show(String(e),'err'); }
+    finally { setEnviandoGC(null); }
   }
 
   async function verificarEstoqueAtual() {

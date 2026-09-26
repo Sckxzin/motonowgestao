@@ -95,6 +95,7 @@ app.post('/gc/vendas-motos/:id/criar', auth, adminOnly, async (req, res) => {
 
     const venda = await db.one('SELECT * FROM vendas_motos WHERE id=$1', [req.params.id]);
     if (!venda) return res.status(404).json({ error: 'Venda não encontrada' });
+    if (venda.gc_venda_id) return res.status(409).json({ error: `Essa venda já foi enviada pro GestãoClick (venda #${venda.gc_venda_codigo || venda.gc_venda_id})` });
 
     const loja = lojaPorCNPJ(venda.cnpj_empresa);
     if (!loja) return res.status(400).json({ error: 'CNPJ da venda não bate com nenhuma loja cadastrada' });
@@ -113,6 +114,8 @@ app.post('/gc/vendas-motos/:id/criar', auth, adminOnly, async (req, res) => {
     const payload = montarPayloadVenda(venda, { cliente, produto, loja, situacaoId: situacao_id });
     const vendaCriada = await criarVenda(payload, credenciais);
 
+    await db.run('UPDATE vendas_motos SET gc_venda_id=$1, gc_venda_codigo=$2, gc_cliente_id=$3, gc_enviado_em=NOW() WHERE id=$4',
+      [vendaCriada?.id || null, vendaCriada?.codigo || null, cliente?.id || null, venda.id]);
     await registrarLog(req, 'GC_CRIAR_VENDA', 'vendas_motos', String(venda.id), `Venda criada no GestãoClick (id ${vendaCriada?.id || '?'})${clienteCriado ? ', cliente também criado' : ''}`);
     res.json({ cliente_criado: clienteCriado, cliente, venda_criada: vendaCriada });
   } catch (e) { res.status(400).json({ error: e.message }); }
@@ -858,6 +861,10 @@ const migracoesProntas = (async () => { try {
   await db.run(`CREATE TABLE IF NOT EXISTS log_atividades (id SERIAL PRIMARY KEY, usuario_id INTEGER, username TEXT, acao TEXT NOT NULL, entidade TEXT, entidade_id TEXT, descricao TEXT, created_at TIMESTAMPTZ DEFAULT NOW())`);
   await db.run(`CREATE TABLE IF NOT EXISTS notificacoes (id SERIAL PRIMARY KEY, tipo TEXT NOT NULL, titulo TEXT NOT NULL, mensagem TEXT, filial TEXT, lida INTEGER DEFAULT 0, created_at TIMESTAMPTZ DEFAULT NOW())`);
   await db.run(`CREATE TABLE IF NOT EXISTS historico_precos (id SERIAL PRIMARY KEY, moto_id INTEGER NOT NULL, chassi TEXT, modelo TEXT, campo TEXT NOT NULL, valor_anterior REAL, valor_novo REAL, alterado_por TEXT, created_at TIMESTAMPTZ DEFAULT NOW())`);
+  await db.run(`ALTER TABLE vendas_motos ADD COLUMN IF NOT EXISTS gc_venda_id TEXT`);
+  await db.run(`ALTER TABLE vendas_motos ADD COLUMN IF NOT EXISTS gc_venda_codigo TEXT`);
+  await db.run(`ALTER TABLE vendas_motos ADD COLUMN IF NOT EXISTS gc_cliente_id TEXT`);
+  await db.run(`ALTER TABLE vendas_motos ADD COLUMN IF NOT EXISTS gc_enviado_em TIMESTAMPTZ`);
   await db.run(`ALTER TABLE vendas_motos_pendentes ADD COLUMN IF NOT EXISTS entrega_km REAL`);
   await db.run(`ALTER TABLE vendas_motos_pendentes ADD COLUMN IF NOT EXISTS entrega_valor REAL NOT NULL DEFAULT 0`);
   await db.run(`ALTER TABLE vendas_motos ADD COLUMN IF NOT EXISTS entrega_km REAL`);
