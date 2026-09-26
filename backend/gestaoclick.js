@@ -136,14 +136,38 @@ function montarPayloadVenda(vendaMotos, { cliente, produto, loja, situacaoId }) 
 // cliente PF os campos de escrita usam prefixo (pf_cpf, pf_rg, pf_data_nascimento,
 // pf_sexo) mesmo saindo sem prefixo na leitura (cpf, rg, ...). "nome" não tem
 // prefixo em nenhum dos dois lados.
+//
+// O endereço segue o formato visto na LEITURA (GET /clientes): um array
+// "enderecos" com objetos {endereco: {tipo_id, nome_tipo, cep, logradouro,
+// numero, complemento, bairro, pais, cidade_id, nome_cidade, estado}}.
+// cidade_id/tipo_id são IDs internos do GestãoClick que a gente não tem
+// (dependeriam de buscar/casar a cidade lá) — por isso aqui manda só os
+// campos de texto (cep, logradouro, numero, complemento, bairro, estado) e
+// deixa cidade_id de fora; ainda não testado contra a API de escrita.
 function montarPayloadCliente(vendaMotos) {
-  return {
+  const payload = {
     tipo_pessoa: 'PF',
     nome: vendaMotos.nome_cliente || null,
     pf_cpf: vendaMotos.cpf || null,
     telefone: vendaMotos.telefone || vendaMotos.numero_cliente || null,
     tipo_contribuinte: TIPO_CONTRIBUINTE_PADRAO,
   };
+  if (vendaMotos.end_cep || vendaMotos.end_rua || vendaMotos.end_bairro) {
+    payload.enderecos = [{
+      endereco: {
+        nome_tipo: 'Residencial',
+        cep: vendaMotos.end_cep || null,
+        logradouro: vendaMotos.end_rua || null,
+        numero: vendaMotos.end_numero || null,
+        complemento: vendaMotos.end_complemento || null,
+        bairro: vendaMotos.end_bairro || null,
+        nome_cidade: vendaMotos.end_cidade || null,
+        estado: vendaMotos.end_uf || null,
+        pais: 'Brasil',
+      },
+    }];
+  }
+  return payload;
 }
 
 async function criarCliente(payload, credenciais) {

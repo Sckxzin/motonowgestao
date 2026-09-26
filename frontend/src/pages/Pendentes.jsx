@@ -15,6 +15,7 @@ export default function Pendentes() {
   const [comissoes, setComissoes] = useState([]);
   const [edits, setEdits] = useState({}); // { [pendenciaId]: { entrega_valor, emplacamento } }
   const [aprovando, setAprovando] = useState(null);
+  const [enviandoGC, setEnviandoGC] = useState(null);
 
   useEffect(() => {
     if (!user) nav('/');
@@ -43,12 +44,23 @@ export default function Pendentes() {
     const ed = edits[id] || {};
     setAprovando(id);
     try {
-      const r = await api.post(`/pendentes/${id}/aprovar`, { entrega_valor:Number(ed.entrega_valor||0), emplacamento:Number(ed.emplacamento||0) });
+      await api.post(`/pendentes/${id}/aprovar`, { entrega_valor:Number(ed.entrega_valor||0), emplacamento:Number(ed.emplacamento||0) });
       setLista(p=>p.filter(x=>x.id!==id));
-      show(r.data?.gestaoclick ? `Venda aprovada e enviada pro GestãoClick (venda #${r.data.gestaoclick.venda_criada?.codigo||'?'})!` : 'Venda aprovada!');
+      show('Venda aprovada!');
     }
     catch(e){ show(String(e),'err'); }
     finally { setAprovando(null); }
+  }
+
+  async function enviarParaGestaoClick(p) {
+    if (!window.confirm(`Enviar essa venda (${p.modelo}, ${p.nome_cliente}) pro GestãoClick? Cria o cliente (se precisar) e a venda concretizada lá — a nota fiscal continua manual, quem emite é a diretoria depois.`)) return;
+    setEnviandoGC(p.id);
+    try {
+      const r = await api.post(`/gc/pendentes/${p.id}/criar`, {});
+      setLista(prev => prev.map(x => x.id===p.id ? { ...x, gc_venda_id:r.data.venda_criada?.id, gc_venda_codigo:r.data.venda_criada?.codigo } : x));
+      show(`Enviada! Venda #${r.data.venda_criada?.codigo} no GestãoClick — agora pode aprovar.`);
+    } catch(e) { show(String(e),'err'); }
+    finally { setEnviandoGC(null); }
   }
 
   async function recusar() {
@@ -77,6 +89,10 @@ export default function Pendentes() {
                       <div key={l}><span style={{fontSize:11,color:'var(--tx3)'}}>{l}</span><div style={{fontSize:13,fontWeight:500,marginTop:2}}>{v}</div></div>
                     ))}
                   </div>
+                  <div style={{marginTop:10,fontSize:12,color:'var(--tx3)'}}>
+                    <span style={{fontWeight:600}}>📍 Endereço: </span>
+                    {p.end_rua ? `${p.end_rua}${p.end_numero?', '+p.end_numero:''}${p.end_bairro?' · '+p.end_bairro:''}${p.end_cidade?' · '+p.end_cidade:''}${p.end_uf?'/'+p.end_uf:''}${p.end_cep?' · CEP '+p.end_cep:''}` : 'não informado pelo vendedor'}
+                  </div>
                   <div className="g2" style={{gap:8,marginTop:12,paddingTop:12,borderTop:'1px dashed var(--bd)'}}>
                     <div className="field" style={{margin:0}}><label>Entrega (R$)</label>
                       <input className="inp" type="number" step="0.01" placeholder="0,00" value={edits[p.id]?.entrega_valor??''} onChange={e=>setEdit(p.id,'entrega_valor',e.target.value)} />
@@ -98,11 +114,18 @@ export default function Pendentes() {
                     </div>
                   )}
                 </div>
-                <div style={{display:'flex',gap:8,flexShrink:0}}>
-                  <button className="btn btn-s" disabled={aprovando===p.id} onClick={()=>aprovar(p.id)}>
-                    {aprovando===p.id ? <span className="spin" /> : '✅ Aprovar'}
-                  </button>
-                  <button className="btn btn-g" style={{color:'var(--red)',borderColor:'var(--redbd)'}} disabled={aprovando===p.id} onClick={()=>{setRecusando(p.id);setMotivo('')}}>✕ Recusar</button>
+                <div style={{display:'flex',flexDirection:'column',gap:8,flexShrink:0,alignItems:'flex-end'}}>
+                  {p.gc_venda_id
+                    ? <span className="badge b-grn" title="Enviada pro GestãoClick">✓ GC #{p.gc_venda_codigo}</span>
+                    : <button className="btn btn-g btn-sm" disabled={enviandoGC===p.id} onClick={()=>enviarParaGestaoClick(p)}>
+                        {enviandoGC===p.id ? <span className="spin" /> : '📤 Enviar pro GestãoClick'}
+                      </button>}
+                  <div style={{display:'flex',gap:8}}>
+                    <button className="btn btn-s" disabled={aprovando===p.id} onClick={()=>aprovar(p.id)}>
+                      {aprovando===p.id ? <span className="spin" /> : '✅ Aprovar'}
+                    </button>
+                    <button className="btn btn-g" style={{color:'var(--red)',borderColor:'var(--redbd)'}} disabled={aprovando===p.id} onClick={()=>{setRecusando(p.id);setMotivo('')}}>✕ Recusar</button>
+                  </div>
                 </div>
               </div>
             </div>

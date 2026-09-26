@@ -426,7 +426,7 @@ app.post('/motos/transferir', auth, adminOnly, async (req, res) => {
   finally { client.release(); }
 });
 app.post('/motos/vender', auth, async (req, res) => {
-  const { moto_id, nome_cliente, cpf, numero_cliente, valor, forma_pagamento, brinde, gasolina, como_chegou, filial_venda, local_retirada, filial_retirada, data_venda, cliente_id, emplacamento, entrega_km } = req.body;
+  const { moto_id, nome_cliente, cpf, numero_cliente, valor, forma_pagamento, brinde, gasolina, como_chegou, filial_venda, local_retirada, filial_retirada, data_venda, cliente_id, emplacamento, entrega_km, end_cep, end_rua, end_numero, end_complemento, end_bairro, end_cidade, end_uf } = req.body;
   if (!moto_id||!filial_venda||!nome_cliente||!valor) return res.status(400).json({ error:'Dados incompletos' });
   const client = await db.connect();
   try {
@@ -448,11 +448,11 @@ app.post('/motos/vender', auth, async (req, res) => {
       const existing = await client.query('SELECT id FROM clientes WHERE telefone=$1 OR nome ILIKE $2 LIMIT 1', [numero_cliente||'__nenhum__', nome_cliente]);
       if (existing.rows[0]) {
         cliId = existing.rows[0].id;
-        await client.query('UPDATE clientes SET nome=$1,cpf=COALESCE($2,cpf),telefone=COALESCE($3,telefone),cidade=COALESCE($4,cidade) WHERE id=$5',
-          [nome_cliente, cpf||null, numero_cliente||null, filial_venda, cliId]);
+        await client.query('UPDATE clientes SET nome=$1,cpf=COALESCE($2,cpf),telefone=COALESCE($3,telefone),cidade=COALESCE($4,cidade),end_cep=COALESCE($5,end_cep),end_rua=COALESCE($6,end_rua),end_numero=COALESCE($7,end_numero),end_complemento=COALESCE($8,end_complemento),end_bairro=COALESCE($9,end_bairro),end_cidade=COALESCE($10,end_cidade),end_uf=COALESCE($11,end_uf) WHERE id=$12',
+          [nome_cliente, cpf||null, numero_cliente||null, filial_venda, end_cep||null, end_rua||null, end_numero||null, end_complemento||null, end_bairro||null, end_cidade||null, end_uf||null, cliId]);
       } else {
-        const nc = await client.query('INSERT INTO clientes(nome,cpf,telefone,cidade) VALUES($1,$2,$3,$4) RETURNING id',
-          [nome_cliente, cpf||null, numero_cliente||null, filial_venda]);
+        const nc = await client.query('INSERT INTO clientes(nome,cpf,telefone,cidade,end_cep,end_rua,end_numero,end_complemento,end_bairro,end_cidade,end_uf) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11) RETURNING id',
+          [nome_cliente, cpf||null, numero_cliente||null, filial_venda, end_cep||null, end_rua||null, end_numero||null, end_complemento||null, end_bairro||null, end_cidade||null, end_uf||null]);
         cliId = nc.rows[0].id;
       }
     }
@@ -461,8 +461,8 @@ app.post('/motos/vender', auth, async (req, res) => {
       if (!jaTem.rows[0]) await client.query('INSERT INTO cliente_motos(cliente_id,chassi,modelo,cor,ano) VALUES($1,$2,$3,$4,$5)',
         [cliId, moto.chassi, moto.modelo, moto.cor, moto.ano_moto]);
     }
-    const p = await client.query(`INSERT INTO vendas_motos_pendentes(moto_id,modelo,cor,chassi,filial_origem,filial_venda,nome_cliente,cpf,numero_cliente,valor,forma_pagamento,brinde,gasolina,como_chegou,local_retirada,filial_retirada,santander,cnpj_empresa,valor_compra,repasse,comissao_valor,cliente_id,data_venda,emplacamento,entrega_km) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25) RETURNING id`,
-      [moto.id,moto.modelo,moto.cor,moto.chassi,moto.filial,filial_venda,nome_cliente,cpf||null,numero_cliente||null,Number(valor),forma_pagamento||null,brinde?1:0,gasolina?Number(gasolina):null,como_chegou||null,local_retirada||null,filial_retirada||null,moto.santander,moto.cnpj_empresa,moto.valor_compra,rep,comissao,cliId,data_venda||null,emplacamento?1:0,entrega_km?Number(entrega_km):null]);
+    const p = await client.query(`INSERT INTO vendas_motos_pendentes(moto_id,modelo,cor,chassi,filial_origem,filial_venda,nome_cliente,cpf,numero_cliente,valor,forma_pagamento,brinde,gasolina,como_chegou,local_retirada,filial_retirada,santander,cnpj_empresa,valor_compra,repasse,comissao_valor,cliente_id,data_venda,emplacamento,entrega_km,end_cep,end_rua,end_numero,end_complemento,end_bairro,end_cidade,end_uf) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29,$30,$31,$32) RETURNING id`,
+      [moto.id,moto.modelo,moto.cor,moto.chassi,moto.filial,filial_venda,nome_cliente,cpf||null,numero_cliente||null,Number(valor),forma_pagamento||null,brinde?1:0,gasolina?Number(gasolina):null,como_chegou||null,local_retirada||null,filial_retirada||null,moto.santander,moto.cnpj_empresa,moto.valor_compra,rep,comissao,cliId,data_venda||null,emplacamento?1:0,entrega_km?Number(entrega_km):null,end_cep||null,end_rua||null,end_numero||null,end_complemento||null,end_bairro||null,end_cidade||null,end_uf||null]);
     await client.query("UPDATE motos SET status='PENDENTE_APROVACAO' WHERE id=$1", [moto.id]);
     await client.query('COMMIT');
     res.json({ id:p.rows[0].id });
@@ -475,42 +475,19 @@ app.get('/pendentes', auth, adminOnly, async (_, res) => {
 });
 app.post('/pendentes/:id/aprovar', auth, adminOnly, async (req, res) => {
   const { entrega_valor, emplacamento } = req.body;
-
-  // Antes de aprovar de verdade no MotoNow, tenta mandar a venda pro GestãoClick
-  // (só quando a loja daquele CNPJ tem token configurado neste ambiente — senão
-  // segue o fluxo antigo, sem GestãoClick). Se essa etapa falhar, a aprovação
-  // não acontece: fica pendente até alguém resolver o problema lá.
-  let gcResultado = null;
-  try {
-    const pendente = await db.one('SELECT * FROM vendas_motos_pendentes WHERE id=$1', [req.params.id]);
-    if (!pendente || pendente.status !== 'PENDENTE') return res.status(400).json({ error: 'Pendência não encontrada' });
-
-    const loja = lojaPorCNPJ(pendente.cnpj_empresa);
-    const credenciais = loja ? credenciaisPorLoja(loja) : null;
-    if (loja && credenciais?.accessToken && credenciais?.secretToken) {
-      const produto = await buscarProdutoPorChassi(pendente.chassi, credenciais);
-      if (!produto) throw new Error('Produto (moto) não encontrado no GestãoClick por esse chassi — cadastre lá antes de aprovar');
-
-      let cliente = await buscarClientePorCPF(pendente.cpf, credenciais);
-      let clienteCriado = false;
-      if (!cliente) {
-        cliente = await criarCliente(montarPayloadCliente(pendente), credenciais);
-        clienteCriado = true;
-      }
-
-      const payload = montarPayloadVenda(pendente, { cliente, produto, loja, situacaoId: SITUACAO_CONCRETIZADA_ID });
-      const vendaCriada = await criarVenda(payload, credenciais);
-      gcResultado = { cliente_criado: clienteCriado, cliente, venda_criada: vendaCriada };
-    }
-  } catch (e) {
-    return res.status(400).json({ error: `Falha ao enviar pro GestãoClick — venda NÃO foi aprovada: ${e.message}` });
-  }
-
   const client = await db.connect();
   try {
     await client.query('BEGIN');
     const p = (await client.query('SELECT * FROM vendas_motos_pendentes WHERE id=$1', [req.params.id])).rows[0];
     if (!p||p.status!=='PENDENTE') throw new Error('Pendência não encontrada');
+    // Se a loja daquele CNPJ tem GestãoClick configurado neste ambiente, exige que
+    // já tenha sido enviada pra lá primeiro (botão manual "Enviar pro GestãoClick",
+    // que aparece antes do Aprovar) — não manda pro GestãoClick escondido aqui dentro.
+    const lojaGC = lojaPorCNPJ(p.cnpj_empresa);
+    const credenciaisGC = lojaGC ? credenciaisPorLoja(lojaGC) : null;
+    if (lojaGC && credenciaisGC?.accessToken && credenciaisGC?.secretToken && !p.gc_venda_id) {
+      throw new Error('Envie essa venda pro GestãoClick primeiro (botão "📤 GestãoClick" aqui do card) e só depois aprove.');
+    }
     let rep = p.repasse;
     if (isRepasseObrigatorio(p.filial_venda)) { const r=getRepasse(p.modelo); if (typeof r!=='number') throw new Error('Repasse não configurado'); rep=r; }
     const entregaValor = entrega_valor!=null ? Number(entrega_valor) : Number(p.entrega_valor||0);
@@ -518,11 +495,12 @@ app.post('/pendentes/:id/aprovar', auth, adminOnly, async (req, res) => {
     const comRows = await client.query('SELECT * FROM comissoes WHERE modelo ILIKE $1 LIMIT 1', [p.modelo]);
     const valorLiquido = calcularValorLiquido({ valor:p.valor, brinde:p.brinde, gasolina:p.gasolina, entrega_valor:entregaValor, emplacamento:emplacamentoValor });
     const comissaoFinal = calcularComissaoComExcedente(comRows.rows[0], valorLiquido);
-    const novaVenda = (await client.query(`INSERT INTO vendas_motos(moto_id,modelo,cor,chassi,filial_origem,filial_venda,nome_cliente,cpf,numero_cliente,valor,forma_pagamento,brinde,gasolina,como_chegou,local_retirada,filial_retirada,santander,cnpj_empresa,valor_compra,repasse,comissao_valor,data_venda,emplacamento,entrega_km,entrega_valor,gc_venda_id,gc_venda_codigo,gc_cliente_id,gc_enviado_em) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29) RETURNING *`,
+    const novaVenda = (await client.query(`INSERT INTO vendas_motos(moto_id,modelo,cor,chassi,filial_origem,filial_venda,nome_cliente,cpf,numero_cliente,valor,forma_pagamento,brinde,gasolina,como_chegou,local_retirada,filial_retirada,santander,cnpj_empresa,valor_compra,repasse,comissao_valor,data_venda,emplacamento,entrega_km,entrega_valor,end_cep,end_rua,end_numero,end_complemento,end_bairro,end_cidade,end_uf,gc_venda_id,gc_venda_codigo,gc_cliente_id,gc_enviado_em) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29,$30,$31,$32,$33,$34,$35,$36) RETURNING *`,
       [p.moto_id,p.modelo,p.cor,p.chassi,p.filial_origem,p.filial_venda,p.nome_cliente,p.cpf,p.numero_cliente,p.valor,p.forma_pagamento,p.brinde,p.gasolina,p.como_chegou,p.local_retirada,p.filial_retirada,p.santander,p.cnpj_empresa,p.valor_compra,rep,comissaoFinal,
        p.data_venda||new Date().toISOString().slice(0,10), // ← USA DATA DA VENDA, não NOW()
        emplacamentoValor,p.entrega_km,entregaValor,
-       gcResultado?.venda_criada?.id||null, gcResultado?.venda_criada?.codigo||null, gcResultado?.cliente?.id||null, gcResultado?new Date():null])).rows[0];
+       p.end_cep,p.end_rua,p.end_numero,p.end_complemento,p.end_bairro,p.end_cidade,p.end_uf,
+       p.gc_venda_id,p.gc_venda_codigo,p.gc_cliente_id,p.gc_enviado_em])).rows[0];
     if (p.brinde) {
       const cap = await client.query("SELECT * FROM pecas WHERE nome ILIKE '%CAPACETE%' AND cidade=$1 AND estoque>0 LIMIT 1", [p.filial_venda]);
       if (!cap.rows[0]) throw new Error('Sem capacete em estoque');
@@ -540,10 +518,42 @@ app.post('/pendentes/:id/aprovar', auth, adminOnly, async (req, res) => {
       ['APROVACAO', '✅ Venda aprovada', `${p.modelo} - ${p.nome_cliente} (${formatBRL(p.valor)})`, p.filial_venda]
     );
     await client.query('COMMIT');
-    await registrarLog(req, 'APROVAR_VENDA', 'vendas_motos', p.id, `${p.modelo} - ${p.nome_cliente}${gcResultado ? ' (enviada pro GestãoClick #' + (gcResultado.venda_criada?.codigo||'?') + ')' : ''}`);
-    res.json({ ok:true, venda_motos: novaVenda, gestaoclick: gcResultado });
+    await registrarLog(req, 'APROVAR_VENDA', 'vendas_motos', p.id, `${p.modelo} - ${p.nome_cliente}${p.gc_venda_id ? ' (já estava no GestãoClick #' + (p.gc_venda_codigo||'?') + ')' : ''}`);
+    res.json({ ok:true, venda_motos: novaVenda });
   } catch(e) { await client.query('ROLLBACK'); res.status(400).json({ error:e.message }); }
   finally { client.release(); }
+});
+
+app.post('/gc/pendentes/:id/criar', auth, adminOnly, async (req, res) => {
+  try {
+    const { situacao_id } = req.body || {};
+    const p = await db.one('SELECT * FROM vendas_motos_pendentes WHERE id=$1', [req.params.id]);
+    if (!p) return res.status(404).json({ error: 'Pendência não encontrada' });
+    if (p.status !== 'PENDENTE') return res.status(400).json({ error: 'Essa pendência já foi aprovada/recusada' });
+    if (p.gc_venda_id) return res.status(409).json({ error: `Essa venda já foi enviada pro GestãoClick (venda #${p.gc_venda_codigo || p.gc_venda_id})` });
+
+    const loja = lojaPorCNPJ(p.cnpj_empresa);
+    if (!loja) return res.status(400).json({ error: 'CNPJ da venda não bate com nenhuma loja cadastrada no GestãoClick' });
+    const credenciais = credenciaisPorLoja(loja);
+
+    const produto = await buscarProdutoPorChassi(p.chassi, credenciais);
+    if (!produto) return res.status(400).json({ error: 'Produto (moto) não encontrado no GestãoClick por esse chassi — cadastre lá antes' });
+
+    let cliente = await buscarClientePorCPF(p.cpf, credenciais);
+    let clienteCriado = false;
+    if (!cliente) {
+      cliente = await criarCliente(montarPayloadCliente(p), credenciais);
+      clienteCriado = true;
+    }
+
+    const payload = montarPayloadVenda(p, { cliente, produto, loja, situacaoId: situacao_id || SITUACAO_CONCRETIZADA_ID });
+    const vendaCriada = await criarVenda(payload, credenciais);
+
+    await db.run('UPDATE vendas_motos_pendentes SET gc_venda_id=$1, gc_venda_codigo=$2, gc_cliente_id=$3, gc_enviado_em=NOW() WHERE id=$4',
+      [vendaCriada?.id || null, vendaCriada?.codigo || null, cliente?.id || null, p.id]);
+    await registrarLog(req, 'GC_CRIAR_VENDA_PENDENTE', 'vendas_motos_pendentes', String(p.id), `Venda criada no GestãoClick (id ${vendaCriada?.id || '?'})${clienteCriado ? ', cliente também criado' : ''}`);
+    res.json({ cliente_criado: clienteCriado, cliente, venda_criada: vendaCriada });
+  } catch (e) { res.status(400).json({ error: e.message }); }
 });
 app.get('/minhas-pendentes', auth, async (req, res) => {
   try {
@@ -897,6 +907,37 @@ const migracoesProntas = (async () => { try {
   await db.run(`ALTER TABLE vendas_motos ADD COLUMN IF NOT EXISTS gc_venda_codigo TEXT`);
   await db.run(`ALTER TABLE vendas_motos ADD COLUMN IF NOT EXISTS gc_cliente_id TEXT`);
   await db.run(`ALTER TABLE vendas_motos ADD COLUMN IF NOT EXISTS gc_enviado_em TIMESTAMPTZ`);
+  // Endereço do cliente — capturado na venda (Home.jsx) pra ir junto pro cadastro
+  // de cliente no GestãoClick. Prefixo end_ pra não colidir com a coluna "cidade"
+  // que já existe (essa é a filial, não a cidade do endereço).
+  await db.run(`ALTER TABLE vendas_motos_pendentes ADD COLUMN IF NOT EXISTS end_cep TEXT`);
+  await db.run(`ALTER TABLE vendas_motos_pendentes ADD COLUMN IF NOT EXISTS end_rua TEXT`);
+  await db.run(`ALTER TABLE vendas_motos_pendentes ADD COLUMN IF NOT EXISTS end_numero TEXT`);
+  await db.run(`ALTER TABLE vendas_motos_pendentes ADD COLUMN IF NOT EXISTS end_complemento TEXT`);
+  await db.run(`ALTER TABLE vendas_motos_pendentes ADD COLUMN IF NOT EXISTS end_bairro TEXT`);
+  await db.run(`ALTER TABLE vendas_motos_pendentes ADD COLUMN IF NOT EXISTS end_cidade TEXT`);
+  await db.run(`ALTER TABLE vendas_motos_pendentes ADD COLUMN IF NOT EXISTS end_uf TEXT`);
+  await db.run(`ALTER TABLE vendas_motos ADD COLUMN IF NOT EXISTS end_cep TEXT`);
+  await db.run(`ALTER TABLE vendas_motos ADD COLUMN IF NOT EXISTS end_rua TEXT`);
+  await db.run(`ALTER TABLE vendas_motos ADD COLUMN IF NOT EXISTS end_numero TEXT`);
+  await db.run(`ALTER TABLE vendas_motos ADD COLUMN IF NOT EXISTS end_complemento TEXT`);
+  await db.run(`ALTER TABLE vendas_motos ADD COLUMN IF NOT EXISTS end_bairro TEXT`);
+  await db.run(`ALTER TABLE vendas_motos ADD COLUMN IF NOT EXISTS end_cidade TEXT`);
+  await db.run(`ALTER TABLE vendas_motos ADD COLUMN IF NOT EXISTS end_uf TEXT`);
+  await db.run(`ALTER TABLE clientes ADD COLUMN IF NOT EXISTS end_cep TEXT`);
+  await db.run(`ALTER TABLE clientes ADD COLUMN IF NOT EXISTS end_rua TEXT`);
+  await db.run(`ALTER TABLE clientes ADD COLUMN IF NOT EXISTS end_numero TEXT`);
+  await db.run(`ALTER TABLE clientes ADD COLUMN IF NOT EXISTS end_complemento TEXT`);
+  await db.run(`ALTER TABLE clientes ADD COLUMN IF NOT EXISTS end_bairro TEXT`);
+  await db.run(`ALTER TABLE clientes ADD COLUMN IF NOT EXISTS end_cidade TEXT`);
+  await db.run(`ALTER TABLE clientes ADD COLUMN IF NOT EXISTS end_uf TEXT`);
+  // Pendências também podem ser enviadas pro GestãoClick antes de aprovar,
+  // via botão manual separado — guarda o resultado aqui pra "Aprovar" só
+  // exigir que já tenha sido enviada (quando a loja tem token configurado).
+  await db.run(`ALTER TABLE vendas_motos_pendentes ADD COLUMN IF NOT EXISTS gc_venda_id TEXT`);
+  await db.run(`ALTER TABLE vendas_motos_pendentes ADD COLUMN IF NOT EXISTS gc_venda_codigo TEXT`);
+  await db.run(`ALTER TABLE vendas_motos_pendentes ADD COLUMN IF NOT EXISTS gc_cliente_id TEXT`);
+  await db.run(`ALTER TABLE vendas_motos_pendentes ADD COLUMN IF NOT EXISTS gc_enviado_em TIMESTAMPTZ`);
   await db.run(`ALTER TABLE vendas_motos_pendentes ADD COLUMN IF NOT EXISTS entrega_km REAL`);
   await db.run(`ALTER TABLE vendas_motos_pendentes ADD COLUMN IF NOT EXISTS entrega_valor REAL NOT NULL DEFAULT 0`);
   await db.run(`ALTER TABLE vendas_motos ADD COLUMN IF NOT EXISTS entrega_km REAL`);
