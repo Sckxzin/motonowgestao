@@ -25,6 +25,24 @@ function credenciaisPorLoja(loja) {
   return { accessToken, secretToken };
 }
 
+// Diagnóstico — nunca devolve o valor dos tokens, só se estão configurados ou
+// não, pra descobrir rápido quando uma loja está caindo escondida no token
+// genérico (nome de variável errado no Railway, variável não salva, etc).
+function statusCredenciais() {
+  return Object.values(LOJAS_POR_CNPJ).map(loja => {
+    const chave = loja.chave;
+    const temEspecifico = !!(process.env['GC_ACCESS_TOKEN_' + chave] && process.env['GC_SECRET_TOKEN_' + chave]);
+    const temGenerico = !!(process.env.GC_ACCESS_TOKEN && process.env.GC_SECRET_TOKEN);
+    return {
+      loja: loja.nome,
+      variaveis_esperadas: `GC_ACCESS_TOKEN_${chave} / GC_SECRET_TOKEN_${chave}`,
+      token_especifico_configurado: temEspecifico,
+      caindo_no_token_generico: !temEspecifico && temGenerico,
+      sem_token_nenhum: !temEspecifico && !temGenerico,
+    };
+  });
+}
+
 function headers(credenciais) {
   const accessToken = credenciais?.accessToken || process.env.GC_ACCESS_TOKEN;
   const secretToken = credenciais?.secretToken || process.env.GC_SECRET_TOKEN;
@@ -183,7 +201,7 @@ async function criarVenda(payload, credenciais) {
 }
 
 module.exports = {
-  gcGet, gcPost, lojaPorCNPJ, credenciaisPorLoja,
+  gcGet, gcPost, lojaPorCNPJ, credenciaisPorLoja, statusCredenciais,
   FORMA_PAGAMENTO_PADRAO, CONDICAO_PAGAMENTO_PADRAO, PLANO_CONTAS_VENDA_MOTO,
   TIPO_CONTRIBUINTE_PADRAO, SITUACAO_CONCRETIZADA_ID,
   buscarClientePorCPF, buscarProdutoPorChassi, montarPayloadVenda, montarPayloadCliente,

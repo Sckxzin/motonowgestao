@@ -5,7 +5,7 @@ const jwt     = require('jsonwebtoken');
 const bcrypt  = require('bcryptjs');
 const db      = require('./db');
 const { isRepasseObrigatorio, getRepasse, calcularComissao, calcularValorLiquido, calcularComissaoComExcedente } = require('./helpers');
-const { gcGet, lojaPorCNPJ, credenciaisPorLoja, buscarClientePorCPF, buscarProdutoPorChassi, montarPayloadVenda, montarPayloadCliente, criarCliente, criarVenda, SITUACAO_CONCRETIZADA_ID } = require('./gestaoclick');
+const { gcGet, lojaPorCNPJ, credenciaisPorLoja, statusCredenciais, buscarClientePorCPF, buscarProdutoPorChassi, montarPayloadVenda, montarPayloadCliente, criarCliente, criarVenda, SITUACAO_CONCRETIZADA_ID } = require('./gestaoclick');
 
 const app = express();
 const JWT  = process.env.JWT_SECRET || 'motonow_secret_2024';
@@ -54,6 +54,12 @@ app.get('/gc/probe/:recurso', auth, adminOnly, async (req, res) => {
 });
 app.get('/gc/loja-por-cnpj/:cnpj', auth, adminOnly, (req, res) => {
   res.json({ cnpj: req.params.cnpj, loja: lojaPorCNPJ(req.params.cnpj) });
+});
+// Diagnóstico — mostra, pra cada loja, se o token ESPECÍFICO dela está
+// configurado neste ambiente ou se ia cair escondido no token genérico
+// (nunca devolve o valor dos tokens, só true/false).
+app.get('/gc/status', auth, adminOnly, (req, res) => {
+  res.json(statusCredenciais());
 });
 // Monta (mas NUNCA envia) o payload de criar venda no GestãoClick pra uma venda
 // de moto já registrada no MotoNow. Só leitura — não cria nada por lá.
