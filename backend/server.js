@@ -506,12 +506,12 @@ app.post('/pendentes/:id/aprovar', auth, adminOnly, async (req, res) => {
     const comRows = await client.query('SELECT * FROM comissoes WHERE modelo ILIKE $1 LIMIT 1', [p.modelo]);
     const valorLiquido = calcularValorLiquido({ valor:p.valor, brinde:p.brinde, gasolina:p.gasolina, entrega_valor:entregaValor, emplacamento:emplacamentoValor });
     const comissaoFinal = calcularComissaoComExcedente(comRows.rows[0], valorLiquido);
-    const novaVenda = (await client.query(`INSERT INTO vendas_motos(moto_id,modelo,cor,chassi,filial_origem,filial_venda,nome_cliente,cpf,numero_cliente,valor,forma_pagamento,brinde,gasolina,como_chegou,local_retirada,filial_retirada,santander,cnpj_empresa,valor_compra,repasse,comissao_valor,data_venda,emplacamento,entrega_km,entrega_valor,end_cep,end_rua,end_numero,end_complemento,end_bairro,end_cidade,end_uf,gc_venda_id,gc_venda_codigo,gc_cliente_id,gc_enviado_em) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29,$30,$31,$32,$33,$34,$35,$36) RETURNING *`,
+    const novaVenda = (await client.query(`INSERT INTO vendas_motos(moto_id,modelo,cor,chassi,filial_origem,filial_venda,nome_cliente,cpf,numero_cliente,valor,forma_pagamento,brinde,gasolina,como_chegou,local_retirada,filial_retirada,santander,cnpj_empresa,valor_compra,repasse,comissao_valor,data_venda,emplacamento,entrega_km,entrega_valor,end_cep,end_rua,end_numero,end_complemento,end_bairro,end_cidade,end_uf,gc_venda_id,gc_venda_codigo,gc_cliente_id,gc_enviado_em,gc_manual) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29,$30,$31,$32,$33,$34,$35,$36,$37) RETURNING *`,
       [p.moto_id,p.modelo,p.cor,p.chassi,p.filial_origem,p.filial_venda,p.nome_cliente,p.cpf,p.numero_cliente,p.valor,p.forma_pagamento,p.brinde,p.gasolina,p.como_chegou,p.local_retirada,p.filial_retirada,p.santander,p.cnpj_empresa,p.valor_compra,rep,comissaoFinal,
        p.data_venda||new Date().toISOString().slice(0,10), // ← USA DATA DA VENDA, não NOW()
        emplacamentoValor,p.entrega_km,entregaValor,
        p.end_cep,p.end_rua,p.end_numero,p.end_complemento,p.end_bairro,p.end_cidade,p.end_uf,
-       p.gc_venda_id,p.gc_venda_codigo,p.gc_cliente_id,p.gc_enviado_em])).rows[0];
+       p.gc_venda_id,p.gc_venda_codigo,p.gc_cliente_id,p.gc_enviado_em,p.gc_manual])).rows[0];
     if (p.brinde) {
       const cap = await client.query("SELECT * FROM pecas WHERE nome ILIKE '%CAPACETE%' AND cidade=$1 AND estoque>0 LIMIT 1", [p.filial_venda]);
       if (!cap.rows[0]) throw new Error('Sem capacete em estoque');
@@ -564,6 +564,25 @@ app.post('/gc/pendentes/:id/criar', auth, adminOnly, async (req, res) => {
       [vendaCriada?.id || null, vendaCriada?.codigo || null, cliente?.id || null, p.id]);
     await registrarLog(req, 'GC_CRIAR_VENDA_PENDENTE', 'vendas_motos_pendentes', String(p.id), `Venda criada no GestãoClick (id ${vendaCriada?.id || '?'})${clienteCriado ? ', cliente também criado' : ''}`);
     res.json({ cliente_criado: clienteCriado, cliente, venda_criada: vendaCriada });
+  } catch (e) { res.status(400).json({ error: e.message }); }
+});
+// Válvula de escape pro caso (já visto na prática) de um produto existir de
+// verdade no GestãoClick mas a API dele não achar por bug interno deles —
+// sem isso a venda fica travada pra sempre. A diretoria cria a venda à mão
+// direto no GestãoClick e só cola o código aqui pra liberar o Aprovar.
+app.post('/gc/pendentes/:id/marcar-manual', auth, adminOnly, async (req, res) => {
+  try {
+    const { codigo } = req.body || {};
+    if (!codigo || !String(codigo).trim()) return res.status(400).json({ error: 'Informe o código da venda criada no GestãoClick' });
+    const p = await db.one('SELECT * FROM vendas_motos_pendentes WHERE id=$1', [req.params.id]);
+    if (!p) return res.status(404).json({ error: 'Pendência não encontrada' });
+    if (p.status !== 'PENDENTE') return res.status(400).json({ error: 'Essa pendência já foi aprovada/recusada' });
+    if (p.gc_venda_id) return res.status(409).json({ error: `Essa venda já foi enviada pro GestãoClick (venda #${p.gc_venda_codigo || p.gc_venda_id})` });
+
+    const codigoLimpo = String(codigo).trim();
+    await db.run('UPDATE vendas_motos_pendentes SET gc_venda_id=$1, gc_venda_codigo=$1, gc_manual=1, gc_enviado_em=NOW() WHERE id=$2', [codigoLimpo, p.id]);
+    await registrarLog(req, 'GC_MARCAR_MANUAL', 'vendas_motos_pendentes', String(p.id), `Venda #${codigoLimpo} marcada como criada manualmente no GestãoClick`);
+    res.json({ ok: true, gc_venda_codigo: codigoLimpo });
   } catch (e) { res.status(400).json({ error: e.message }); }
 });
 app.get('/minhas-pendentes', auth, async (req, res) => {
@@ -949,6 +968,12 @@ const migracoesProntas = (async () => { try {
   await db.run(`ALTER TABLE vendas_motos_pendentes ADD COLUMN IF NOT EXISTS gc_venda_codigo TEXT`);
   await db.run(`ALTER TABLE vendas_motos_pendentes ADD COLUMN IF NOT EXISTS gc_cliente_id TEXT`);
   await db.run(`ALTER TABLE vendas_motos_pendentes ADD COLUMN IF NOT EXISTS gc_enviado_em TIMESTAMPTZ`);
+  // Válvula de escape: às vezes um produto existe de verdade no GestãoClick mas
+  // a API dele não acha (bug já visto lá, não é coisa nossa) — sem isso a venda
+  // fica travada pra sempre (não envia automático, não aprova). gc_manual marca
+  // que foi conferido/criado à mão direto no GestãoClick, não pelo botão.
+  await db.run(`ALTER TABLE vendas_motos_pendentes ADD COLUMN IF NOT EXISTS gc_manual INTEGER NOT NULL DEFAULT 0`);
+  await db.run(`ALTER TABLE vendas_motos ADD COLUMN IF NOT EXISTS gc_manual INTEGER NOT NULL DEFAULT 0`);
   await db.run(`ALTER TABLE vendas_motos_pendentes ADD COLUMN IF NOT EXISTS entrega_km REAL`);
   await db.run(`ALTER TABLE vendas_motos_pendentes ADD COLUMN IF NOT EXISTS entrega_valor REAL NOT NULL DEFAULT 0`);
   await db.run(`ALTER TABLE vendas_motos ADD COLUMN IF NOT EXISTS entrega_km REAL`);

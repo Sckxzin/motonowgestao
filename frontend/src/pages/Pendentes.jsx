@@ -16,6 +16,9 @@ export default function Pendentes() {
   const [edits, setEdits] = useState({}); // { [pendenciaId]: { entrega_valor, emplacamento } }
   const [aprovando, setAprovando] = useState(null);
   const [enviandoGC, setEnviandoGC] = useState(null);
+  const [marcandoManual, setMarcandoManual] = useState(null);
+  const [codigoManual, setCodigoManual] = useState('');
+  const [salvandoManual, setSalvandoManual] = useState(false);
 
   useEffect(() => {
     if (!user) nav('/');
@@ -61,6 +64,18 @@ export default function Pendentes() {
       show(`Enviada! Venda #${r.data.venda_criada?.codigo} no GestãoClick — agora pode aprovar.`);
     } catch(e) { show(String(e),'err'); }
     finally { setEnviandoGC(null); }
+  }
+
+  async function marcarManual() {
+    if (!codigoManual.trim()) { show('Informe o código da venda no GestãoClick', 'err'); return; }
+    setSalvandoManual(true);
+    try {
+      const r = await api.post(`/gc/pendentes/${marcandoManual}/marcar-manual`, { codigo: codigoManual.trim() });
+      setLista(prev => prev.map(x => x.id===marcandoManual ? { ...x, gc_venda_id:r.data.gc_venda_codigo, gc_venda_codigo:r.data.gc_venda_codigo, gc_manual:1 } : x));
+      show('Marcada como enviada manualmente — agora pode aprovar.');
+      setMarcandoManual(null); setCodigoManual('');
+    } catch(e) { show(String(e),'err'); }
+    finally { setSalvandoManual(false); }
   }
 
   async function recusar() {
@@ -116,10 +131,15 @@ export default function Pendentes() {
                 </div>
                 <div style={{display:'flex',flexDirection:'column',gap:8,flexShrink:0,alignItems:'flex-end'}}>
                   {p.gc_venda_id
-                    ? <span className="badge b-grn" title="Enviada pro GestãoClick">✓ GC #{p.gc_venda_codigo}</span>
-                    : <button className="btn btn-g btn-sm" disabled={enviandoGC===p.id} onClick={()=>enviarParaGestaoClick(p)}>
-                        {enviandoGC===p.id ? <span className="spin" /> : '📤 Enviar pro GestãoClick'}
-                      </button>}
+                    ? <span className="badge b-grn" title={p.gc_manual?'Marcada como criada manualmente no GestãoClick':'Enviada pro GestãoClick'}>✓ GC #{p.gc_venda_codigo}{p.gc_manual?' (manual)':''}</span>
+                    : <>
+                        <button className="btn btn-g btn-sm" disabled={enviandoGC===p.id} onClick={()=>enviarParaGestaoClick(p)}>
+                          {enviandoGC===p.id ? <span className="spin" /> : '📤 Enviar pro GestãoClick'}
+                        </button>
+                        <button className="linklike" style={{fontSize:11,color:'var(--tx3)',background:'none',border:'none',cursor:'pointer',padding:0}} onClick={()=>{setMarcandoManual(p.id);setCodigoManual('')}}>
+                          não achou? marcar manual →
+                        </button>
+                      </>}
                   <div style={{display:'flex',gap:8}}>
                     <button className="btn btn-s" disabled={aprovando===p.id} onClick={()=>aprovar(p.id)}>
                       {aprovando===p.id ? <span className="spin" /> : '✅ Aprovar'}
@@ -136,6 +156,12 @@ export default function Pendentes() {
         <div className="mhd"><h3>Recusar venda</h3><button className="mclose" onClick={()=>setRecusando(null)}>×</button></div>
         <div className="field"><label>Motivo (opcional)</label><textarea className="inp" autoFocus value={motivo} onChange={e=>setMotivo(e.target.value)} /></div>
         <div className="mfoot"><button className="btn btn-g" onClick={()=>setRecusando(null)}>Cancelar</button><button className="btn btn-p" onClick={recusar}>Confirmar recusa</button></div>
+      </div></div>}
+      {marcandoManual&&<div className="mbg" onClick={()=>setMarcandoManual(null)}><div className="mbox" onClick={e=>e.stopPropagation()}>
+        <div className="mhd"><h3>Marcar como enviada manualmente</h3><button className="mclose" onClick={()=>setMarcandoManual(null)}>×</button></div>
+        <p style={{fontSize:13,color:'var(--tx3)',marginBottom:12}}>Use isso só quando o botão automático não funcionar (ex: produto existe no GestãoClick mas a busca não acha — bug conhecido de lá). Crie a venda à mão direto no GestãoClick e cola o código dela aqui.</p>
+        <div className="field"><label>Código da venda no GestãoClick</label><input className="inp" autoFocus placeholder="Ex: 11205" value={codigoManual} onChange={e=>setCodigoManual(e.target.value)} /></div>
+        <div className="mfoot"><button className="btn btn-g" onClick={()=>setMarcandoManual(null)}>Cancelar</button><button className="btn btn-p" disabled={salvandoManual} onClick={marcarManual}>{salvandoManual?'Salvando...':'Confirmar'}</button></div>
       </div></div>}
     </div>
   );
