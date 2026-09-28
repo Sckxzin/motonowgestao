@@ -46,9 +46,14 @@ app.get('/health', (_, res) => res.json({ ok: true }));
 // real dos dados do GestãoClick antes de implementar a integração de verdade.
 app.get('/gc/probe/:recurso', auth, adminOnly, async (req, res) => {
   try {
-    const loja = req.query.cnpj ? lojaPorCNPJ(req.query.cnpj) : null;
+    const { cnpj, ...resto } = req.query;
+    const loja = cnpj ? lojaPorCNPJ(cnpj) : null;
     const credenciais = credenciaisPorLoja(loja);
-    const r = await gcGet('/' + req.params.recurso, { limite: req.query.limite || 2 }, credenciais);
+    // Qualquer outro query param (ex: ?codigo=..., ?cpf_cnpj=...) passa direto
+    // pro GestãoClick como filtro — pra reproduzir exatamente o que o código
+    // de verdade manda, sem precisar de um probe novo pra cada filtro.
+    const params = { limite: 2, ...resto };
+    const r = await gcGet('/' + req.params.recurso, params, credenciais);
     res.status(r.status).json(r.json);
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
