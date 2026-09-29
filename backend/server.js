@@ -482,14 +482,21 @@ app.post('/motos/vender', auth, async (req, res) => {
 });
 
 app.get('/pendentes', auth, adminOnly, async (_, res) => {
-  res.json(await db.q("SELECT * FROM vendas_motos_pendentes WHERE status='PENDENTE' ORDER BY created_at DESC"));
+  // gc_venda_id vira '__ENVIANDO__' por um instante enquanto uma requisição de
+  // envio pro GestãoClick está em andamento (trava contra clique duplo) — nunca
+  // deve aparecer pro front, então mascara como se ainda não tivesse sido enviada.
+  res.json(await db.q("SELECT *, CASE WHEN gc_venda_id='__ENVIANDO__' THEN NULL ELSE gc_venda_id END AS gc_venda_id_masc FROM vendas_motos_pendentes WHERE status='PENDENTE' ORDER BY created_at DESC")
+    .then(rows => rows.map(r => ({ ...r, gc_venda_id: r.gc_venda_id_masc, gc_venda_id_masc: undefined }))));
 });
 app.post('/pendentes/:id/aprovar', auth, adminOnly, async (req, res) => {
   const { entrega_valor, emplacamento } = req.body;
   const client = await db.connect();
   try {
     await client.query('BEGIN');
-    const p = (await client.query('SELECT * FROM vendas_motos_pendentes WHERE id=$1', [req.params.id])).rows[0];
+    // FOR UPDATE trava a linha — evita que dois cliques em Aprovar quase ao mesmo
+    // tempo aprovem a mesma pendência duas vezes (venda duplicada, capacete
+    // descontado duas vezes, moto marcada vendida duas vezes).
+    const p = (await client.query('SELECT * FROM vendas_motos_pendentes WHERE id=$1 FOR UPDATE', [req.params.id])).rows[0];
     if (!p||p.status!=='PENDENTE') throw new Error('Pendência não encontrada');
     // Se a loja daquele CNPJ tem GestãoClick configurado neste ambiente, exige que
     // já tenha sido enviada pra lá primeiro (botão manual "Enviar pro GestãoClick",
@@ -536,6 +543,7 @@ app.post('/pendentes/:id/aprovar', auth, adminOnly, async (req, res) => {
 });
 
 app.post('/gc/pendentes/:id/criar', auth, adminOnly, async (req, res) => {
+  let reivindicado = false;
   try {
     const { situacao_id } = req.body || {};
     const p = await db.one('SELECT * FROM vendas_motos_pendentes WHERE id=$1', [req.params.id]);
@@ -543,12 +551,23 @@ app.post('/gc/pendentes/:id/criar', auth, adminOnly, async (req, res) => {
     if (p.status !== 'PENDENTE') return res.status(400).json({ error: 'Essa pendência já foi aprovada/recusada' });
     if (p.gc_venda_id) return res.status(409).json({ error: `Essa venda já foi enviada pro GestãoClick (venda #${p.gc_venda_codigo || p.gc_venda_id})` });
 
+    // Reivindica a pendência ANTES de chamar o GestãoClick — atômico via
+    // WHERE gc_venda_id IS NULL, pra dois cliques (ou duas abas) quase juntos
+    // não criarem a mesma venda duplicada lá. Se não conseguir reivindicar,
+    // é porque outra requisição já está processando essa mesma pendência.
+    const reivindicacao = await db.one(
+      "UPDATE vendas_motos_pendentes SET gc_venda_id='__ENVIANDO__' WHERE id=$1 AND status='PENDENTE' AND gc_venda_id IS NULL RETURNING id",
+      [p.id]
+    );
+    if (!reivindicacao) return res.status(409).json({ error: 'Essa venda já está sendo enviada pro GestãoClick agora — aguarde ou atualize a página.' });
+    reivindicado = true;
+
     const loja = lojaPorCNPJ(p.cnpj_empresa);
-    if (!loja) return res.status(400).json({ error: 'CNPJ da venda não bate com nenhuma loja cadastrada no GestãoClick' });
+    if (!loja) throw new Error('CNPJ da venda não bate com nenhuma loja cadastrada no GestãoClick');
     const credenciais = credenciaisPorLoja(loja);
 
     const produto = await buscarProdutoPorChassi(p.chassi, credenciais);
-    if (!produto) return res.status(400).json({ error: 'Produto (moto) não encontrado no GestãoClick por esse chassi — cadastre lá antes' });
+    if (!produto) throw new Error('Produto (moto) não encontrado no GestãoClick por esse chassi — cadastre lá antes');
 
     let cliente = await buscarClientePorCPF(p.cpf, credenciais);
     let clienteCriado = false;
@@ -564,7 +583,14 @@ app.post('/gc/pendentes/:id/criar', auth, adminOnly, async (req, res) => {
       [vendaCriada?.id || null, vendaCriada?.codigo || null, cliente?.id || null, p.id]);
     await registrarLog(req, 'GC_CRIAR_VENDA_PENDENTE', 'vendas_motos_pendentes', String(p.id), `Venda criada no GestãoClick (id ${vendaCriada?.id || '?'})${clienteCriado ? ', cliente também criado' : ''}`);
     res.json({ cliente_criado: clienteCriado, cliente, venda_criada: vendaCriada });
-  } catch (e) { res.status(400).json({ error: e.message }); }
+  } catch (e) {
+    // Libera a reivindicação em caso de erro, senão a pendência fica travada
+    // achando que já foi enviada sem nunca ter sido de verdade.
+    if (reivindicado) {
+      await db.run("UPDATE vendas_motos_pendentes SET gc_venda_id=NULL WHERE id=$1 AND gc_venda_id='__ENVIANDO__'", [req.params.id]).catch(()=>{});
+    }
+    res.status(400).json({ error: e.message });
+  }
 });
 // Válvula de escape pro caso (já visto na prática) de um produto existir de
 // verdade no GestãoClick mas a API dele não achar por bug interno deles —
@@ -574,14 +600,23 @@ app.post('/gc/pendentes/:id/marcar-manual', auth, adminOnly, async (req, res) =>
   try {
     const { codigo } = req.body || {};
     if (!codigo || !String(codigo).trim()) return res.status(400).json({ error: 'Informe o código da venda criada no GestãoClick' });
-    const p = await db.one('SELECT * FROM vendas_motos_pendentes WHERE id=$1', [req.params.id]);
-    if (!p) return res.status(404).json({ error: 'Pendência não encontrada' });
-    if (p.status !== 'PENDENTE') return res.status(400).json({ error: 'Essa pendência já foi aprovada/recusada' });
-    if (p.gc_venda_id) return res.status(409).json({ error: `Essa venda já foi enviada pro GestãoClick (venda #${p.gc_venda_codigo || p.gc_venda_id})` });
-
     const codigoLimpo = String(codigo).trim();
-    await db.run('UPDATE vendas_motos_pendentes SET gc_venda_id=$1, gc_venda_codigo=$1, gc_manual=1, gc_enviado_em=NOW() WHERE id=$2', [codigoLimpo, p.id]);
-    await registrarLog(req, 'GC_MARCAR_MANUAL', 'vendas_motos_pendentes', String(p.id), `Venda #${codigoLimpo} marcada como criada manualmente no GestãoClick`);
+
+    // Check-and-set atômico numa query só — evita que duas requisições quase
+    // juntas (dois cliques, duas abas) passem no "ainda não tem gc_venda_id"
+    // e as duas gravem, uma por cima da outra.
+    const marcado = await db.one(
+      "UPDATE vendas_motos_pendentes SET gc_venda_id=$1, gc_venda_codigo=$1, gc_manual=1, gc_enviado_em=NOW() WHERE id=$2 AND status='PENDENTE' AND gc_venda_id IS NULL RETURNING id",
+      [codigoLimpo, req.params.id]
+    );
+    if (!marcado) {
+      const p = await db.one('SELECT * FROM vendas_motos_pendentes WHERE id=$1', [req.params.id]);
+      if (!p) return res.status(404).json({ error: 'Pendência não encontrada' });
+      if (p.status !== 'PENDENTE') return res.status(400).json({ error: 'Essa pendência já foi aprovada/recusada' });
+      return res.status(409).json({ error: `Essa venda já foi enviada pro GestãoClick (venda #${p.gc_venda_codigo || p.gc_venda_id})` });
+    }
+
+    await registrarLog(req, 'GC_MARCAR_MANUAL', 'vendas_motos_pendentes', req.params.id, `Venda #${codigoLimpo} marcada como criada manualmente no GestãoClick`);
     res.json({ ok: true, gc_venda_codigo: codigoLimpo });
   } catch (e) { res.status(400).json({ error: e.message }); }
 });
