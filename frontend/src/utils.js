@@ -96,7 +96,7 @@ export const MODELOS_MOTOS = [
   { modelo:'SHI 250 EFI',      motonow:16990, santander:18400, sant:true },
   { modelo:'SBM 150',          motonow:13989, santander:14700, sant:true },
   { modelo:'NEW JET 125 EFI',  motonow:10490, santander:11100, sant: true},
-  { modelo:'URBAN LITE',       motonow:13000, santander:10600, sant:true},
+  { modelo:'URBAN LITE',       motonow:9989, santander:10600, sant:true},
 ];
 
 const REPASSE = {
