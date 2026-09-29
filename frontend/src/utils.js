@@ -1,13 +1,13 @@
 export const FILIAIS = [
   'ESCADA','IPOJUCA','RIBEIRAO','SAO JOSE','CATENDE',
-  'XEXEU','MARAGOGI','CHA GRANDE','TENDA','FABRICA','BRENO ESCADA',
+  'XEXEU','MARAGOGI','IPOJUCA RICO','CHA GRANDE','TENDA','FABRICA',
 ];
 
 export const FILIAIS_VENDA = [...FILIAIS, 'DIRETORIA', 'DISTRIBUIÇÃO'];
 
 export const LOJAS_RETIRADA = [
   'ESCADA','IPOJUCA','RIBEIRAO','SAO JOSE','CATENDE',
-  'MARAGOGI','CHA GRANDE','BRENO ESCADA',
+  'XEXEU','MARAGOGI','IPOJUCA RICO','CHA GRANDE',
   'DIRETORIA','DISTRIBUIÇÃO',
 ];
 
@@ -56,6 +56,7 @@ export const VALOR_MINIMO_VENDA = {
   'ATV EFI 200':        25000,
   'NEW ATV 200 EFI':    25000,
   'NEW JET 125 EFI':    12000,
+  'URBAN LITE':         13000,
 };
 
 export function getValorMinimoVenda(modelo) {
@@ -95,6 +96,7 @@ export const MODELOS_MOTOS = [
   { modelo:'SHI 250 EFI',      motonow:16990, santander:18400, sant:true },
   { modelo:'SBM 150',          motonow:13989, santander:14700, sant:true },
   { modelo:'NEW JET 125 EFI',  motonow:10490, santander:11100, sant: true},
+  { modelo:'URBAN LITE',       motonow:13000, santander:10600, sant:true},
 ];
 
 const REPASSE = {
@@ -102,7 +104,7 @@ const REPASSE = {
   NEWJET125:9500, URBAN150EFI:18100, IRON250:19600, ATV125EFI:16000,
   SHI175CARB:12900, NEWJEF:12600, PHOENIX50:7100, JEF150EFI:13800,
   NEWATV200EFI:23600, NEWSHI175CARB:14100, NEWSHI175EFI:15300,
-  NEWJET50:9100, RIO125EFI:10600, RIO125:8900, SBM150:14700, NEWJET125EFI:11100
+  NEWJET50:9100, RIO125EFI:10600, RIO125:8900, SBM150:14700, NEWJET125EFI:11100, URBANLITE:10600
 };
 
 export const FILIAIS_REPASSE = ['SAO JOSE','MARAGOGI','CATENDE','XEXEU'];
@@ -133,20 +135,6 @@ export function tierComissao(comissaoRow, valorLiquido) {
   if (v >= comissaoRow.v50)  return 50;
   if (v >= comissaoRow.v30)  return 30;
   return 30;
-}
-// Comissão de verdade: valor da faixa + acréscimo por cada R$100 que o valor
-// líquido passar do mínimo daquela faixa. tierComissao (acima) fica só pra
-// mostrar o valor fixo do sistema antigo, como comparação.
-const INCREMENTO_POR_TIER = { 30: 4, 50: 7, 100: 25 };
-export function calcularComissaoComExcedente(comissaoRow, valorLiquido) {
-  if (!comissaoRow) return 30;
-  const v = Number(valorLiquido||0);
-  let tier, minimo;
-  if (v >= comissaoRow.v100) { tier = 100; minimo = comissaoRow.v100; }
-  else if (v >= comissaoRow.v50) { tier = 50; minimo = comissaoRow.v50; }
-  else { tier = 30; minimo = comissaoRow.v30; }
-  const excedente = Math.max(0, v - minimo);
-  return Math.round((tier + INCREMENTO_POR_TIER[tier] * (excedente / 100)) * 100) / 100;
 }
 export function findComissaoRow(comissoes, modelo) {
   if (!modelo) return null;
