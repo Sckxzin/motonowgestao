@@ -42,6 +42,7 @@ const REPASSE_MAP = {
   [normKey('SBM 150')]:          14700,
   [normKey('NEW JET 125 EFI')]:  11100,
   [normKey('PHOENIX 50')]:       7100,
+  [normKey('BICICLETA ELETRICA')]: 4000,
 };
 function isRepasseObrigatorio(filial) {
   const f = String(filial||'').toUpperCase()
