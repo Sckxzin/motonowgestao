@@ -109,19 +109,27 @@ function getValorBase(v) {
 function getFaixa(v, comissoes) {
   return tierComissao(findComissaoRow(comissoes, v.modelo), getValorBase(v));
 }
-function getARepassar(v) {
+// Comissão calculada AO VIVO com a tabela de faixas atual — não confia no
+// comissao_valor gravado no banco, que fica congelado desde a aprovação e
+// nunca é atualizado sozinho se uma faixa for cadastrada/alterada depois
+// (foi assim que uma venda aprovada antes de existir faixa pro modelo ficou
+// presa em R$30 pra sempre, mesmo depois da faixa certa ser cadastrada).
+function getComissao(v, comissoes) {
+  return calcularComissaoComExcedente(findComissaoRow(comissoes, v.modelo), getValorBase(v));
+}
+function getARepassar(v, comissoes) {
   if (!temRepasseObrig(v)) return 0;
   const rep = Number(v.repasse || 0);
   if (!rep || rep <= 0) return 0;
-  return Number(v.valor||0) - rep - (v.brinde?100:0) - Number(v.gasolina||0) - Number(v.comissao_valor||0);
+  return Number(v.valor||0) - rep - (v.brinde?100:0) - Number(v.gasolina||0) - getComissao(v, comissoes);
 }
 
 
-function getLiquido(v) {
+function getLiquido(v, comissoes) {
   const isEmenezes = v.santander === true || v.santander === 1;
   const val = Number(v.valor||0);
   const compra = Number(v.valor_compra||0);
-  const comissao = Number(v.comissao_valor||0);
+  const comissao = getComissao(v, comissoes);
   const brinde = v.brinde ? 100 : 0;
 
   if (temRepasseObrig(v)) {
@@ -259,8 +267,8 @@ export default function VendasMotos() {
       const e = getEmpresa(v) === 'EMENEZES';
       const val = Number(v.valor||0);
       const compra = Number(v.valor_compra||0);
-      const rep = getARepassar(v);
-      const liq = getLiquido(v);
+      const rep = getARepassar(v, comissoes);
+      const liq = getLiquido(v, comissoes);
       if (e) { fatE+=val; repE+=rep; liqE+=liq; }
       else   { fatM+=val; repM+=rep; liqM+=liq; }
       // Bruto geral: com repasse usa líquido, sem repasse usa valor - compra
@@ -269,7 +277,7 @@ export default function VendasMotos() {
       } else {
         bruto += val - compra;
       }
-      comissao += Number(v.comissao_valor||0);
+      comissao += getComissao(v, comissoes);
       comissaoAntiga += tierComissao(findComissaoRow(comissoes, v.modelo), v.valor);
     });
     return { fatE, fatM, repE, repM, liqE, liqM, bruto, comissao, comissaoAntiga };
@@ -303,8 +311,8 @@ export default function VendasMotos() {
       case 'valor':       return <b style={{color:'var(--grn)'}}>{formatBRL(v.valor)}</b>;
       case 'compra':      return formatBRL(v.valor_compra);
       case 'repasse':     return v.repasse ? formatBRL(v.repasse) : '-';
-      case 'a_repassar':  return getARepassar(v) > 0 ? <b style={{color:'var(--red)'}}>{formatBRL(getARepassar(v))}</b> : '-';
-      case 'liquido':     return <b style={{color: getLiquido(v) >= 0 ? 'var(--grn)' : 'var(--red)'}}>{formatBRL(getLiquido(v))}</b>;
+      case 'a_repassar':  return getARepassar(v, comissoes) > 0 ? <b style={{color:'var(--red)'}}>{formatBRL(getARepassar(v, comissoes))}</b> : '-';
+      case 'liquido':     return <b style={{color: getLiquido(v, comissoes) >= 0 ? 'var(--grn)' : 'var(--red)'}}>{formatBRL(getLiquido(v, comissoes))}</b>;
       case 'pagamento': return <span style={{fontSize:11,wordBreak:'break-word'}}>{v.forma_pagamento||'—'}</span>;
       case 'gasolina':    return v.gasolina ? formatBRL(v.gasolina) : '-';
       case 'entrega':     return v.entrega_valor ? formatBRL(v.entrega_valor) : '-';
@@ -324,8 +332,9 @@ export default function VendasMotos() {
       case 'rr':          return v.rr ? <span className="badge b-blu">SIM</span> : '-';
       case 'comissao': {
         const semFaixa = !findComissaoRow(comissoes, v.modelo);
+        const comissaoViva = getComissao(v, comissoes);
         return <span title={semFaixa?`"${v.modelo}" sem faixa de comissão cadastrada`:undefined} style={semFaixa?{color:'var(--red)'}:undefined}>
-          {v.comissao_valor > 0 ? formatBRL(v.comissao_valor) : '-'}{semFaixa?' ⚠️':''}
+          {comissaoViva > 0 ? formatBRL(comissaoViva) : '-'}{semFaixa?' ⚠️':''}
         </span>;
       }
       case 'comissao_antiga': {
@@ -382,15 +391,15 @@ export default function VendasMotos() {
         case 'valor':      return brNum(v.valor);
         case 'compra':     return brNum(v.valor_compra);
         case 'repasse':    return brNum(v.repasse);
-        case 'a_repassar': return brNum(getARepassar(v));
-        case 'liquido':    return brNum(getLiquido(v));
+        case 'a_repassar': return brNum(getARepassar(v, comissoes));
+        case 'liquido':    return brNum(getLiquido(v, comissoes));
         case 'pagamento':  return v.forma_pagamento || '';
         case 'gasolina':   return brNum(v.gasolina);
         case 'entrega':    return brNum(v.entrega_valor);
         case 'descontos':  return brNum(getDescontos(v));
         case 'valor_base': return brNum(getValorBase(v));
         case 'faixa':      return 'R$' + getFaixa(v, comissoes);
-        case 'comissao':   return brNum(v.comissao_valor);
+        case 'comissao':   return brNum(getComissao(v, comissoes));
         case 'comissao_antiga': return brNum(tierComissao(findComissaoRow(comissoes, v.modelo), v.valor));
         case 'empresa':    return getEmpresa(v);
         case 'brinde':     return v.brinde ? 'SIM' : 'NÃO';
