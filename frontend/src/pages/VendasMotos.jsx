@@ -96,6 +96,9 @@ function temRepasseObrig(v) {
   const filial = (v.filial_venda||'').toUpperCase().trim();
   return FILIAIS_COM_REPASSE.includes(filial);
 }
+// Excel em pt-BR espera vírgula como separador decimal — com ponto, ele trata
+// a célula como texto (não soma, não totaliza), mesmo o valor em si estando certo.
+function brNum(n) { return Number(n||0).toFixed(2).replace('.', ','); }
 
 function getDescontos(v) {
   return Number(v.valor||0) - calcularValorLiquido({ valor:v.valor, brinde:v.brinde, gasolina:v.gasolina, entrega_valor:v.entrega_valor, emplacamento:v.emplacamento });
@@ -376,24 +379,24 @@ export default function VendasMotos() {
         case 'filial':     return v.filial_venda || '';
         case 'origem':     return v.filial_origem || '';
         case 'cnpj':       return getCNPJ(v);
-        case 'valor':      return Number(v.valor||0).toFixed(2);
-        case 'compra':     return Number(v.valor_compra||0).toFixed(2);
-        case 'repasse':    return Number(v.repasse||0).toFixed(2);
-        case 'a_repassar': return getARepassar(v).toFixed(2);
-        case 'liquido':    return getLiquido(v).toFixed(2);
+        case 'valor':      return brNum(v.valor);
+        case 'compra':     return brNum(v.valor_compra);
+        case 'repasse':    return brNum(v.repasse);
+        case 'a_repassar': return brNum(getARepassar(v));
+        case 'liquido':    return brNum(getLiquido(v));
         case 'pagamento':  return v.forma_pagamento || '';
-        case 'gasolina':   return Number(v.gasolina||0).toFixed(2);
-        case 'entrega':    return Number(v.entrega_valor||0).toFixed(2);
-        case 'descontos':  return getDescontos(v).toFixed(2);
-        case 'valor_base': return getValorBase(v).toFixed(2);
+        case 'gasolina':   return brNum(v.gasolina);
+        case 'entrega':    return brNum(v.entrega_valor);
+        case 'descontos':  return brNum(getDescontos(v));
+        case 'valor_base': return brNum(getValorBase(v));
         case 'faixa':      return 'R$' + getFaixa(v, comissoes);
-        case 'comissao':   return Number(v.comissao_valor||0).toFixed(2);
-        case 'comissao_antiga': return Number(tierComissao(findComissaoRow(comissoes, v.modelo), v.valor)).toFixed(2);
+        case 'comissao':   return brNum(v.comissao_valor);
+        case 'comissao_antiga': return brNum(tierComissao(findComissaoRow(comissoes, v.modelo), v.valor));
         case 'empresa':    return getEmpresa(v);
         case 'brinde':     return v.brinde ? 'SIM' : 'NÃO';
         case 'rp':         return v.rp ? 'SIM' : 'NÃO';
         case 'rr':         return v.rr ? 'SIM' : 'NÃO';
-        case 'emplacamento': return Number(v.emplacamento||0).toFixed(2);
+        case 'emplacamento': return brNum(v.emplacamento);
         case 'chassi':     return (v.chassi||'').trim();
         default:           return v[c.key] ?? '';
       }
