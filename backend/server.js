@@ -307,8 +307,10 @@ app.delete('/pecas/:id', auth, adminOnly, async (req, res) => {
 });
 
 app.post('/vendas', auth, async (req, res) => {
-  const { cliente_nome, cliente_telefone, forma_pagamento, itens, total, cidade, observacao, modelo_moto, chassi_moto, km, cliente_id } = req.body;
+  const { cliente_nome, cliente_telefone, cliente_cpf, forma_pagamento, itens, total, cidade, observacao, modelo_moto, chassi_moto, km, cliente_id } = req.body;
   if (!cliente_nome||!forma_pagamento||!cidade) return res.status(400).json({ error:'Dados incompletos' });
+  // CPF obrigatório pra emitir a nota certinho.
+  if (String(cliente_cpf||'').replace(/\D/g,'').length !== 11) return res.status(400).json({ error:'CPF é obrigatório (11 dígitos) — precisa pra emitir a nota certinho' });
   const client = await db.connect();
   try {
     await client.query('BEGIN');
@@ -317,8 +319,8 @@ app.post('/vendas', auth, async (req, res) => {
       const c = await client.query('SELECT id FROM clientes WHERE telefone=$1 OR nome=$2 LIMIT 1', [cliente_telefone, cliente_nome]);
       if (c.rows[0]) cliId = c.rows[0].id;
     }
-    const v = await client.query('INSERT INTO vendas(cliente_nome,cliente_telefone,forma_pagamento,total,cidade,observacao,modelo_moto,chassi_moto,km,cliente_id) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) RETURNING id',
-      [cliente_nome, cliente_telefone||null, forma_pagamento, Number(total||0), cidade, observacao||null, modelo_moto||null, chassi_moto||null, km||null, cliId]);
+    const v = await client.query('INSERT INTO vendas(cliente_nome,cliente_telefone,cliente_cpf,forma_pagamento,total,cidade,observacao,modelo_moto,chassi_moto,km,cliente_id) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11) RETURNING id',
+      [cliente_nome, cliente_telefone||null, cliente_cpf||null, forma_pagamento, Number(total||0), cidade, observacao||null, modelo_moto||null, chassi_moto||null, km||null, cliId]);
     const vendaId = v.rows[0].id;
     for (const it of (itens||[])) {
       const p = await client.query('SELECT nome,estoque FROM pecas WHERE id=$1', [it.peca_id]);
@@ -999,6 +1001,8 @@ const migracoesProntas = (async () => { try {
   await db.run(`ALTER TABLE clientes ADD COLUMN IF NOT EXISTS end_bairro TEXT`);
   await db.run(`ALTER TABLE clientes ADD COLUMN IF NOT EXISTS end_cidade TEXT`);
   await db.run(`ALTER TABLE clientes ADD COLUMN IF NOT EXISTS end_uf TEXT`);
+  // CPF do cliente na venda de peças (carrinho) — exigido pra emitir a nota.
+  await db.run(`ALTER TABLE vendas ADD COLUMN IF NOT EXISTS cliente_cpf TEXT`);
   // Pendências também podem ser enviadas pro GestãoClick antes de aprovar,
   // via botão manual separado — guarda o resultado aqui pra "Aprovar" só
   // exigir que já tenha sido enviada (quando a loja tem token configurado).
