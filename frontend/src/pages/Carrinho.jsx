@@ -76,6 +76,7 @@ export default function Carrinho() {
   async function finalizar() {
     if (!itens.length) { show('Carrinho vazio', 'err'); return; }
     if (!nome || !pgto) { show('Preencha nome e forma de pagamento', 'err'); return; }
+    if (String(cpf||'').replace(/\D/g,'').length !== 11) { show('CPF é obrigatório (11 dígitos) — precisa pra emitir a nota certinho', 'err'); return; }
     setLoading(true);
     try {
       const obsFinal = [
@@ -231,7 +232,7 @@ export default function Carrinho() {
                 )}
 
                 <div className="field"><label>Nome *</label><input className="inp" value={nome} onChange={e => setNome(e.target.value)} placeholder="Nome completo" /></div>
-                <div className="field"><label>CPF</label><input className="inp" value={cpf} onChange={e => setCpf(e.target.value)} placeholder="000.000.000-00" /></div>
+                <div className="field"><label>CPF *</label><input className="inp" value={cpf} onChange={e => setCpf(e.target.value)} placeholder="000.000.000-00" /></div>
                 <div className="field"><label>Telefone</label><input className="inp" value={tel} onChange={e => setTel(e.target.value)} placeholder="(81) 9..." /></div>
               </div>
 

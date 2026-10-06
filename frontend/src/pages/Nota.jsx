@@ -29,6 +29,7 @@ export default function Nota() {
           <div style={{borderTop:'1px dashed #999',margin:'8px 0'}} />
         </div>
         <div><b>Cliente:</b> {venda.cliente_nome}</div>
+        <div><b>CPF:</b> {venda.cliente_cpf||'—'}</div>
         <div><b>Tel:</b> {venda.cliente_telefone||'—'}</div>
         <div><b>Data:</b> {fmtDateTime(venda.created_at)}</div>
         <div><b>Pgto:</b> {venda.forma_pagamento}</div>
