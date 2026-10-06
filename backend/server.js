@@ -439,6 +439,9 @@ app.post('/motos/transferir', auth, adminOnly, async (req, res) => {
 app.post('/motos/vender', auth, async (req, res) => {
   const { moto_id, nome_cliente, cpf, numero_cliente, valor, forma_pagamento, brinde, gasolina, como_chegou, filial_venda, local_retirada, filial_retirada, data_venda, cliente_id, emplacamento, entrega_km, end_cep, end_rua, end_numero, end_complemento, end_bairro, end_cidade, end_uf } = req.body;
   if (!moto_id||!filial_venda||!nome_cliente||!valor) return res.status(400).json({ error:'Dados incompletos' });
+  // CPF obrigatório — é a chave usada pra achar/criar o cliente no GestãoClick
+  // na hora de gerar a nota; sem ele a venda não tem como ir pra lá certinho.
+  if (String(cpf||'').replace(/\D/g,'').length !== 11) return res.status(400).json({ error:'CPF é obrigatório (11 dígitos) — precisa pra emitir a nota certinho' });
   const client = await db.connect();
   try {
     await client.query('BEGIN');
