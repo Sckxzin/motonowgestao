@@ -169,6 +169,8 @@ export default function Home() {
 
   async function venderMoto() {
     if (!vf.clienteNome || !vf.valor || !vf.filialVenda || !vf.numero) { show('Preencha os campos obrigatórios', 'err'); return; }
+    const cpfDigits = String(vf.cpf||'').replace(/\D/g,'');
+    if (cpfDigits.length !== 11) { show('CPF é obrigatório (11 dígitos) — precisa pra emitir a nota certinho', 'err'); return; }
     try {
       await api.post('/motos/vender', { moto_id:motoVenda.id, nome_cliente:vf.clienteNome, cpf:vf.cpf||null, numero_cliente:vf.numero, valor:Number(vf.valor), forma_pagamento:vf.pagamento||null, brinde:!!vf.brinde, gasolina:vf.gasolina?Number(vf.gasolina):null, como_chegou:vf.chegou||null, filial_venda:vf.filialVenda, local_retirada:vf.localRet||null, filial_retirada:vf.localRet==='LOJA'?vf.lojaRet:null, emplacamento:!!vf.emplacamento, entrega_km:vf.localRet==='ENTREGA'&&vf.km?Number(vf.km):null, end_cep:vf.endCep||null, end_rua:vf.endRua||null, end_numero:vf.endNumero||null, end_complemento:vf.endComplemento||null, end_bairro:vf.endBairro||null, end_cidade:vf.endCidade||null, end_uf:vf.endUf||null });
       setMotoVenda(null); show('Solicitação enviada para aprovação!'); loadMotos();
@@ -484,7 +486,7 @@ export default function Home() {
           <div className="g2">
             <div className="field"><label>Cliente *</label><input className="inp" autoFocus placeholder="Nome" value={vf.clienteNome||''} onChange={e=>setVf({...vf,clienteNome:e.target.value})} /></div>
             <div className="field"><label>WhatsApp *</label><input className="inp" placeholder="(81) 9..." value={vf.numero||''} onChange={e=>setVf({...vf,numero:e.target.value})} /></div>
-            <div className="field"><label>CPF</label><input className="inp" placeholder="000.000.000-00" value={vf.cpf||''} onChange={e=>setVf({...vf,cpf:e.target.value})} /></div>
+            <div className="field"><label>CPF *</label><input className="inp" placeholder="000.000.000-00" value={vf.cpf||''} onChange={e=>setVf({...vf,cpf:e.target.value})} /></div>
             <div className="field"><label>Valor *</label><input className="inp" type="number" value={vf.valor||''} onChange={e=>setVf({...vf,valor:e.target.value})} /></div>
             <div className="field"><label>Gasolina</label><input className="inp" type="number" value={vf.gasolina||''} onChange={e=>setVf({...vf,gasolina:e.target.value})} /></div>
           </div>
