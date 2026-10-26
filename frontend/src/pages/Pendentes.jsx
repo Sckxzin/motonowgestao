@@ -26,6 +26,26 @@ export default function Pendentes() {
     api.get('/comissoes').then(r=>setComissoes(r.data)).catch(()=>{});
   }, []);
 
+  async function enviarTermo(p, file) {
+    if (!file) return;
+    if (!['image/jpeg','image/png','image/webp'].includes(file.type) || file.size > 5 * 1024 * 1024) {
+      show('Selecione JPG, PNG ou WEBP de até 5 MB.', 'err'); return;
+    }
+    try {
+      const base64 = await new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(String(reader.result).split(',')[1]);
+        reader.onerror = () => reject(new Error('Não foi possível ler a imagem.'));
+        reader.readAsDataURL(file);
+      });
+      await api.post(`/pendentes/${p.id}/termo-garantia`, {
+        termo_garantia_base64:base64, termo_garantia_mime:file.type, termo_garantia_nome:file.name
+      });
+      setLista(prev => prev.map(x => x.id===p.id ? {...x, termo_garantia_anexado:true} : x));
+      show('Termo de garantia anexado!');
+    } catch(e) { show(e?.response?.data?.error || 'Erro ao anexar o termo.', 'err'); }
+  }
+
   function setEdit(id, campo, valor) {
     setEdits(prev => ({ ...prev, [id]: { ...prev[id], [campo]: valor } }));
   }
@@ -98,6 +118,17 @@ export default function Pendentes() {
                   <div style={{display:'flex',alignItems:'center',gap:10,marginBottom:12}}>
                     <span className="badge b-yel">Pendente</span>
                     <span style={{fontSize:12,color:'var(--tx3)'}}>{fmtDateTime(p.created_at)}</span>
+                  </div>
+                  <div style={{marginBottom:12,padding:12,borderRadius:'var(--r)',border:`1px solid ${p.termo_garantia_anexado?'var(--grnbd)':'var(--redbd)'}`,background:p.termo_garantia_anexado?'var(--grndim)':'var(--reddim)'}}>
+                    {p.termo_garantia_anexado ? (
+                      <span style={{color:'var(--grn)',fontWeight:600}}>✅ Termo de garantia anexado</span>
+                    ) : (
+                      <div>
+                        <div style={{color:'var(--red)',fontWeight:700,marginBottom:6}}>⚠️ TERMO DE GARANTIA FALTANDO — enviar para regularizar</div>
+                        <input type="file" accept="image/jpeg,image/png,image/webp" onChange={e=>{const file=e.target.files?.[0];e.target.value='';enviarTermo(p,file);}} />
+                        <small style={{display:'block',color:'var(--tx3)',marginTop:4}}>Imagem JPG, PNG ou WEBP, até 5 MB. A venda pode ser aprovada mesmo sem o documento.</small>
+                      </div>
+                    )}
                   </div>
                   <div className="g2" style={{gap:8}}>
                     {[['Moto',`${p.modelo} · ${p.cor}`],['Chassi',p.chassi],['Cliente',p.nome_cliente],['Valor',formatBRL(p.valor)],['Filial venda',p.filial_venda],['Pagamento',p.forma_pagamento||'—'],['Gasolina',p.gasolina?formatBRL(p.gasolina):'—'],['Brinde',p.brinde?'Sim':'Não'],['Como chegou',p.como_chegou||'—'],['WhatsApp',p.numero_cliente||'—'],['Retirada',p.local_retirada==='ENTREGA'?`Entrega${p.entrega_km?` (~${p.entrega_km}km)`:''}`:(p.local_retirada||'—')]].map(([l,v])=>(
