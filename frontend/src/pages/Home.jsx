@@ -41,6 +41,7 @@ export default function Home() {
   const [filtCor, setFiltCor] = useState('TODAS');
 
   const [motoVenda, setMotoVenda] = useState(null);
+  const [termoGarantia, setTermoGarantia] = useState(null);
   const [clienteBuscado, setClienteBuscado] = useState(null);
   const [buscandoCliente, setBuscandoCliente] = useState(false);
   const [usuarios, setUsuarios] = useState([]);
@@ -172,8 +173,20 @@ export default function Home() {
     const cpfDigits = String(vf.cpf||'').replace(/\D/g,'');
     if (cpfDigits.length !== 11) { show('CPF é obrigatório (11 dígitos) — precisa pra emitir a nota certinho', 'err'); return; }
     try {
-      await api.post('/motos/vender', { moto_id:motoVenda.id, nome_cliente:vf.clienteNome, cpf:vf.cpf||null, numero_cliente:vf.numero, valor:Number(vf.valor), forma_pagamento:vf.pagamento||null, brinde:!!vf.brinde, gasolina:vf.gasolina?Number(vf.gasolina):null, como_chegou:vf.chegou||null, filial_venda:vf.filialVenda, local_retirada:vf.localRet||null, filial_retirada:vf.localRet==='LOJA'?vf.lojaRet:null, emplacamento:!!vf.emplacamento, entrega_km:vf.localRet==='ENTREGA'&&vf.km?Number(vf.km):null, end_cep:vf.endCep||null, end_rua:vf.endRua||null, end_numero:vf.endNumero||null, end_complemento:vf.endComplemento||null, end_bairro:vf.endBairro||null, end_cidade:vf.endCidade||null, end_uf:vf.endUf||null });
-      setMotoVenda(null); show('Solicitação enviada para aprovação!'); loadMotos();
+      let termoBase64 = null;
+      if (termoGarantia) {
+        if (!['image/jpeg','image/png','image/webp'].includes(termoGarantia.type) || termoGarantia.size > 5 * 1024 * 1024) {
+          show('O termo deve ser JPG, PNG ou WEBP de até 5 MB.', 'err'); return;
+        }
+        termoBase64 = await new Promise((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onload = () => resolve(String(reader.result).split(',')[1]);
+          reader.onerror = () => reject(new Error('Não foi possível ler a imagem.'));
+          reader.readAsDataURL(termoGarantia);
+        });
+      }
+      await api.post('/motos/vender', { moto_id:motoVenda.id, nome_cliente:vf.clienteNome, cpf:vf.cpf||null, numero_cliente:vf.numero, valor:Number(vf.valor), forma_pagamento:vf.pagamento||null, brinde:!!vf.brinde, gasolina:vf.gasolina?Number(vf.gasolina):null, como_chegou:vf.chegou||null, filial_venda:vf.filialVenda, local_retirada:vf.localRet||null, filial_retirada:vf.localRet==='LOJA'?vf.lojaRet:null, emplacamento:!!vf.emplacamento, entrega_km:vf.localRet==='ENTREGA'&&vf.km?Number(vf.km):null, end_cep:vf.endCep||null, end_rua:vf.endRua||null, end_numero:vf.endNumero||null, end_complemento:vf.endComplemento||null, end_bairro:vf.endBairro||null, end_cidade:vf.endCidade||null, end_uf:vf.endUf||null, termo_garantia_base64:termoBase64, termo_garantia_mime:termoGarantia?.type||null, termo_garantia_nome:termoGarantia?.name||null });
+      setMotoVenda(null); setTermoGarantia(null); show('Solicitação enviada para aprovação!'); loadMotos();
     } catch (e) { show(String(e), 'err'); }
   }
 
@@ -434,7 +447,7 @@ export default function Home() {
                   <td><StatusBadge status={m.status} negociadoPor={m.negociacao_por} usuarios={usuarios} /></td>
                   <td><div style={{display:'flex',gap:5,flexWrap:'wrap'}}>
                     {m.status==='DISPONIVEL' && <>
-                      <button className="ab red" onClick={()=>{setMotoVenda(m);setVf({clienteNome:'',cpf:'',valor:'',numero:'',gasolina:'',pagamento:'',chegou:'',filialVenda:'',localRet:'',lojaRet:'',km:'',brinde:false,emplacamento:false});setClienteBuscado(null);}}>Vender</button>
+                      <button className="ab red" onClick={()=>{setMotoVenda(m);setTermoGarantia(null);setVf({clienteNome:'',cpf:'',valor:'',numero:'',gasolina:'',pagamento:'',chegou:'',filialVenda:'',localRet:'',lojaRet:'',km:'',brinde:false,emplacamento:false});setClienteBuscado(null);}}>Vender</button>
                       <button className="ab" onClick={()=>alterarStatus(m.id,'NEGOCIACAO')}>🤝</button>
                     </>}
                     {m.status==='NEGOCIACAO' && (isDir(user)||m.negociacao_por===user.id) && <button className="ab" onClick={()=>alterarStatus(m.id,'DISPONIVEL')}>↩</button>}
@@ -554,6 +567,12 @@ export default function Home() {
           {vf.localRet==='ENTREGA' && <div className="field"><label>KM estimado da entrega</label>
             <input className="inp" type="number" placeholder="Ex: 25" value={vf.km||''} onChange={e=>setVf({...vf,km:e.target.value})} />
           </div>}
+          <div className="field" style={{marginBottom:16}}>
+            <label>📎 Termo de garantia (opcional)</label>
+            <input className="inp" type="file" accept="image/jpeg,image/png,image/webp" onChange={e=>setTermoGarantia(e.target.files?.[0]||null)} />
+            <small style={{display:'block',color:'var(--tx3)',marginTop:5}}>JPG, PNG ou WEBP, até 5 MB. Se não anexar agora, a diretoria verá o aviso e poderá enviar depois.</small>
+            {termoGarantia && <small style={{display:'block',color:'var(--grn)',marginTop:5}}>Selecionado: {termoGarantia.name}</small>}
+          </div>
           <div style={{display:'flex',gap:20,marginBottom:16,flexWrap:'wrap'}}>
             <label className="ck"><input type="checkbox" checked={!!vf.brinde} onChange={e=>setVf({...vf,brinde:e.target.checked})} /> Capacete de brinde</label>
             <label className="ck"><input type="checkbox" checked={!!vf.emplacamento} onChange={e=>setVf({...vf,emplacamento:e.target.checked})} /> Inclui emplacamento</label>
