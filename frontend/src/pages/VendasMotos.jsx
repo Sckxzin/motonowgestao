@@ -187,6 +187,35 @@ export default function VendasMotos() {
     return tierComissao(findComissaoRow(comissoes, ef.modelo), ef.valor);
   }, [edit, ef.valor, ef.modelo, comissoes]);
 
+  async function enviarTermoVenda(v, file) {
+    if (!file) return;
+    if (!['image/jpeg','image/png','image/webp'].includes(file.type) || file.size > 5 * 1024 * 1024) {
+      show('Selecione JPG, PNG ou WEBP de até 5 MB.', 'err'); return;
+    }
+    try {
+      const base64 = await new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(String(reader.result).split(',')[1]);
+        reader.onerror = () => reject(new Error('Não foi possível ler a imagem.'));
+        reader.readAsDataURL(file);
+      });
+      await api.post(`/vendas-motos/${v.id}/termo-garantia`, {
+        termo_garantia_base64:base64, termo_garantia_mime:file.type, termo_garantia_nome:file.name
+      });
+      setVendas(prev => prev.map(x => x.id===v.id ? {...x, termo_garantia_anexado:true, termo_garantia_nome:file.name} : x));
+      show('Termo de garantia anexado!');
+    } catch(e) { show(e?.response?.data?.error || 'Erro ao anexar o termo.', 'err'); }
+  }
+
+  async function verTermoVenda(v) {
+    try {
+      const r = await api.get(`/vendas-motos/${v.id}/termo-garantia`, { responseType:'blob' });
+      const url = URL.createObjectURL(r.data);
+      window.open(url, '_blank', 'noopener,noreferrer');
+      setTimeout(() => URL.revokeObjectURL(url), 60000);
+    } catch(e) { show(e?.response?.data?.error || 'Não foi possível abrir o termo.', 'err'); }
+  }
+
   // Relatório de verificação pós-exclusão de duplicados
   const [verificacao, setVerificacao] = useState(null); // array de {chassi, modelo, status, filial} | null
 
@@ -356,6 +385,10 @@ export default function VendasMotos() {
         );
       }
       case 'acoes':       return <div style={{display:'flex',gap:6,alignItems:'center',flexWrap:'wrap'}}>
+        {!v.termo_garantia_anexado ? <>
+          <span title="Documento ainda não enviado" style={{color:'var(--red)',fontWeight:700,fontSize:11}}>⚠️ Termo faltando</span>
+          <label className="ab" style={{cursor:'pointer'}}>📎 Enviar termo<input type="file" accept="image/jpeg,image/png,image/webp" style={{display:'none'}} onChange={e=>{const file=e.target.files?.[0];e.target.value='';enviarTermoVenda(v,file);}} /></label>
+        </> : <button className="ab" onClick={()=>verTermoVenda(v)}>👁 Ver termo</button>}
         <button className="ab" onClick={() => { setEdit(v); setEf({
           modelo:v.modelo||'', cor:v.cor||'', chassi:(v.chassi||'').trim(),
           filial_venda:v.filial_venda||'', filial_origem:v.filial_origem||'',
