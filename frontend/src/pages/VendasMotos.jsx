@@ -208,12 +208,14 @@ export default function VendasMotos() {
   }
 
   async function verTermoVenda(v) {
+    const janela = window.open('', '_blank');
+    if (!janela) { show('Permita pop-ups para visualizar o termo.', 'err'); return; }
     try {
       const r = await api.get(`/vendas-motos/${v.id}/termo-garantia`, { responseType:'blob' });
       const url = URL.createObjectURL(r.data);
-      window.open(url, '_blank', 'noopener,noreferrer');
+      janela.location.href = url;
       setTimeout(() => URL.revokeObjectURL(url), 60000);
-    } catch(e) { show(e?.response?.data?.error || 'Não foi possível abrir o termo.', 'err'); }
+    } catch(e) { janela.close(); show(e?.response?.data?.error || 'Não foi possível abrir o termo.', 'err'); }
   }
 
   // Relatório de verificação pós-exclusão de duplicados
