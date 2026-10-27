@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import Topbar from '../components/Topbar';
 import useToast from '../hooks/useToast';
 import api from '../api';
-import { getUser, formatBRL, fmtDate, FILIAIS, calcularValorLiquido, tierComissao, calcularComissaoComExcedente, findComissaoRow } from '../utils';
+import { getUser, formatBRL, fmtDate, FILIAIS, BANCOS_FINANCIAMENTO, montarFormaPagamento, parseFormaPagamento, calcularValorLiquido, tierComissao, calcularComissaoComExcedente, findComissaoRow } from '../utils';
 
 const CIDADES_PADRAO = ['BRENO ESCADA','ESCADA','IPOJUCA','RIBEIRAO','SAO JOSE','CATENDE','MARAGOGI','CHA GRANDE','TENDA'];
 
@@ -396,7 +396,7 @@ export default function VendasMotos() {
           filial_venda:v.filial_venda||'', filial_origem:v.filial_origem||'',
           nome_cliente:v.nome_cliente||'', numero_cliente:v.numero_cliente||'',
           valor:v.valor||'', valor_compra:v.valor_compra||'', repasse:v.repasse||'',
-          forma_pagamento:v.forma_pagamento||'', como_chegou:v.como_chegou||'',
+          forma_pagamento:v.forma_pagamento||'', ...parseFormaPagamento(v.forma_pagamento), como_chegou:v.como_chegou||'',
           gasolina:v.gasolina||0, brinde:!!v.brinde, santander:!!v.santander,
           cnpj_empresa:v.cnpj_empresa||'',
           rp:!!v.rp, rr:!!v.rr, emplacamento:v.emplacamento||0, entrega_valor:v.entrega_valor||0,
@@ -550,8 +550,10 @@ export default function VendasMotos() {
   }
 
   async function salvarEdit() {
+    if (ef.pagTipo==='FINANCIADO' && (!ef.pagBanco || !ef.pagEntrada)) { show('Selecione o banco e se teve entrada', 'err'); return; }
     try {
-      const r = await api.put(`/vendas-motos/${edit.id}`, ef);
+      const payload = { ...ef, forma_pagamento: ef.pagTipo ? montarFormaPagamento(ef) : ef.forma_pagamento };
+      const r = await api.put(`/vendas-motos/${edit.id}`, payload);
       setVendas(p => p.map(v => v.id===edit.id ? {...v,...r.data} : v));
       show('Salvo!'); setEdit(null);
     } catch(e) { show(String(e),'err'); }
@@ -787,7 +789,13 @@ export default function VendasMotos() {
               </div>
             </div>
             <div className="g2">
-              <div className="field"><label>Forma pagamento</label><input className="inp" value={ef.forma_pagamento} onChange={e=>setEf({...ef,forma_pagamento:e.target.value})} /></div>
+              <div className="field"><label>Pagamento{ef.forma_pagamento && !ef.pagTipo ? ` (atual: ${ef.forma_pagamento})` : ''}</label>
+                <select className="inp" value={ef.pagTipo||''} onChange={e=>setEf({...ef,pagTipo:e.target.value,pagBanco:'',pagEntrada:''})}>
+                  <option value="">{ef.forma_pagamento && !ef.pagTipo ? 'Manter atual' : 'Selecione'}</option>
+                  <option value="A_VISTA">À vista</option>
+                  <option value="FINANCIADO">Financiado</option>
+                </select>
+              </div>
               <div className="field"><label>Como chegou</label>
                 <select className="inp" value={ef.como_chegou} onChange={e=>setEf({...ef,como_chegou:e.target.value})}>
                   <option value="">-</option>
@@ -795,6 +803,21 @@ export default function VendasMotos() {
                 </select>
               </div>
             </div>
+            {ef.pagTipo==='FINANCIADO' && <div className="g2">
+              <div className="field"><label>Banco</label>
+                <select className="inp" value={ef.pagBanco||''} onChange={e=>setEf({...ef,pagBanco:e.target.value})}>
+                  <option value="">Selecione</option>
+                  {BANCOS_FINANCIAMENTO.map(b=><option key={b}>{b}</option>)}
+                </select>
+              </div>
+              <div className="field"><label>Entrada</label>
+                <select className="inp" value={ef.pagEntrada||''} onChange={e=>setEf({...ef,pagEntrada:e.target.value})}>
+                  <option value="">Selecione</option>
+                  <option value="COM">Com entrada</option>
+                  <option value="SEM">Sem entrada</option>
+                </select>
+              </div>
+            </div>}
             <div className="g2">
               <div className="field"><label>⛽ Gasolina (R$)</label><input className="inp" type="number" value={ef.gasolina} onChange={e=>setEf({...ef,gasolina:e.target.value})} /></div>
               <div className="field"><label>🛵 Entrega (R$)</label><input className="inp" type="number" step="0.01" value={ef.entrega_valor} onChange={e=>setEf({...ef,entrega_valor:e.target.value})} /></div>
