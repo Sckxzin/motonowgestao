@@ -551,6 +551,7 @@ export default function VendasMotos() {
 
   async function salvarEdit() {
     if (ef.pagTipo==='FINANCIADO' && (!ef.pagBanco || !ef.pagEntrada)) { show('Selecione o banco e se teve entrada', 'err'); return; }
+    if (ef.pagTipo==='FINANCIADO' && ef.pagEntrada==='COM' && !(Number(ef.pagEntradaValor)>0)) { show('Informe o valor da entrada', 'err'); return; }
     try {
       const payload = { ...ef, forma_pagamento: ef.pagTipo ? montarFormaPagamento(ef) : ef.forma_pagamento };
       const r = await api.put(`/vendas-motos/${edit.id}`, payload);
@@ -811,11 +812,16 @@ export default function VendasMotos() {
                 </select>
               </div>
               <div className="field"><label>Entrada</label>
-                <select className="inp" value={ef.pagEntrada||''} onChange={e=>setEf({...ef,pagEntrada:e.target.value})}>
+                <select className="inp" value={ef.pagEntrada||''} onChange={e=>setEf({...ef,pagEntrada:e.target.value,pagEntradaValor:''})}>
                   <option value="">Selecione</option>
                   <option value="COM">Com entrada</option>
                   <option value="SEM">Sem entrada</option>
                 </select>
+              </div>
+            </div>}
+            {ef.pagTipo==='FINANCIADO' && ef.pagEntrada==='COM' && <div className="g2">
+              <div className="field"><label>Valor da entrada (R$)</label>
+                <input className="inp" type="number" step="0.01" placeholder="0,00" value={ef.pagEntradaValor||''} onChange={e=>setEf({...ef,pagEntradaValor:e.target.value})} />
               </div>
             </div>}
             <div className="g2">

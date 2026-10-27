@@ -174,6 +174,7 @@ export default function Home() {
     if (cpfDigits.length !== 11) { show('CPF é obrigatório (11 dígitos) — precisa pra emitir a nota certinho', 'err'); return; }
     if (!vf.pagTipo) { show('Selecione a forma de pagamento', 'err'); return; }
     if (vf.pagTipo==='FINANCIADO' && (!vf.pagBanco || !vf.pagEntrada)) { show('Selecione o banco e se teve entrada', 'err'); return; }
+    if (vf.pagTipo==='FINANCIADO' && vf.pagEntrada==='COM' && !(Number(vf.pagEntradaValor)>0)) { show('Informe o valor da entrada', 'err'); return; }
     try {
       let termoBase64 = null;
       if (termoGarantia) {
@@ -449,7 +450,7 @@ export default function Home() {
                   <td><StatusBadge status={m.status} negociadoPor={m.negociacao_por} usuarios={usuarios} /></td>
                   <td><div style={{display:'flex',gap:5,flexWrap:'wrap'}}>
                     {m.status==='DISPONIVEL' && <>
-                      <button className="ab red" onClick={()=>{setMotoVenda(m);setTermoGarantia(null);setVf({clienteNome:'',cpf:'',valor:'',numero:'',gasolina:'',pagTipo:'',pagBanco:'',pagEntrada:'',chegou:'',filialVenda:'',localRet:'',lojaRet:'',km:'',brinde:false,emplacamento:false});setClienteBuscado(null);}}>Vender</button>
+                      <button className="ab red" onClick={()=>{setMotoVenda(m);setTermoGarantia(null);setVf({clienteNome:'',cpf:'',valor:'',numero:'',gasolina:'',pagTipo:'',pagBanco:'',pagEntrada:'',pagEntradaValor:'',chegou:'',filialVenda:'',localRet:'',lojaRet:'',km:'',brinde:false,emplacamento:false});setClienteBuscado(null);}}>Vender</button>
                       <button className="ab" onClick={()=>alterarStatus(m.id,'NEGOCIACAO')}>🤝</button>
                     </>}
                     {m.status==='NEGOCIACAO' && (isDir(user)||m.negociacao_por===user.id) && <button className="ab" onClick={()=>alterarStatus(m.id,'DISPONIVEL')}>↩</button>}
@@ -567,11 +568,16 @@ export default function Home() {
               </select>
             </div>
             <div className="field"><label>Entrada *</label>
-              <select className="inp" value={vf.pagEntrada||''} onChange={e=>setVf({...vf,pagEntrada:e.target.value})}>
+              <select className="inp" value={vf.pagEntrada||''} onChange={e=>setVf({...vf,pagEntrada:e.target.value,pagEntradaValor:''})}>
                 <option value="">Selecione</option>
                 <option value="COM">Com entrada</option>
                 <option value="SEM">Sem entrada</option>
               </select>
+            </div>
+          </div>}
+          {vf.pagTipo==='FINANCIADO' && vf.pagEntrada==='COM' && <div className="g2">
+            <div className="field"><label>Valor da entrada (R$) *</label>
+              <input className="inp" type="number" step="0.01" placeholder="0,00" value={vf.pagEntradaValor||''} onChange={e=>setVf({...vf,pagEntradaValor:e.target.value})} />
             </div>
           </div>}
           <div className="field"><label>Loja de retirada</label>

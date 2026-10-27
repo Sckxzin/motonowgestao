@@ -114,8 +114,13 @@ export const BANCOS_FINANCIAMENTO = ['BANCO PAN','MOTRIX','BV','MOTO DA GENTE','
 
 // Monta um texto padronizado de forma_pagamento (venda de moto) a partir das
 // escolhas estruturadas do modal, em vez de deixar o vendedor digitar livre.
-export function montarFormaPagamento({ pagTipo, pagBanco, pagEntrada }) {
-  if (pagTipo === 'FINANCIADO') return `FINANCIADO - ${pagBanco || '(banco não informado)'} - ${pagEntrada === 'COM' ? 'COM ENTRADA' : 'SEM ENTRADA'}`;
+export function montarFormaPagamento({ pagTipo, pagBanco, pagEntrada, pagEntradaValor }) {
+  if (pagTipo === 'FINANCIADO') {
+    const entradaTexto = pagEntrada === 'COM'
+      ? `COM ENTRADA DE ${formatBRL(pagEntradaValor)}`
+      : 'SEM ENTRADA';
+    return `FINANCIADO - ${pagBanco || '(banco não informado)'} - ${entradaTexto}`;
+  }
   if (pagTipo === 'A_VISTA') return 'À VISTA';
   return '';
 }
@@ -123,11 +128,15 @@ export function montarFormaPagamento({ pagTipo, pagBanco, pagEntrada }) {
 // já salvo (pra pré-preencher o modal de editar). Texto antigo/livre que não
 // bate com o padrão fica com tudo vazio — o usuário escolhe de novo.
 export function parseFormaPagamento(raw) {
-  const s = String(raw||'').trim().toUpperCase();
-  if (s === 'À VISTA' || s === 'A VISTA') return { pagTipo:'A_VISTA', pagBanco:'', pagEntrada:'' };
-  const m = s.match(/^FINANCIADO - (.+) - (COM|SEM) ENTRADA$/);
-  if (m) return { pagTipo:'FINANCIADO', pagBanco:m[1], pagEntrada:m[2] };
-  return { pagTipo:'', pagBanco:'', pagEntrada:'' };
+  const s = String(raw||'').trim();
+  const su = s.toUpperCase();
+  if (su === 'À VISTA' || su === 'A VISTA') return { pagTipo:'A_VISTA', pagBanco:'', pagEntrada:'', pagEntradaValor:'' };
+  const m = s.match(/^FINANCIADO - (.+) - (COM|SEM) ENTRADA(?: DE R\$\s?([\d.,]+))?$/i);
+  if (m) {
+    const valor = m[3] ? m[3].replace(/\./g,'').replace(',','.') : '';
+    return { pagTipo:'FINANCIADO', pagBanco:m[1].toUpperCase(), pagEntrada:m[2].toUpperCase(), pagEntradaValor:valor };
+  }
+  return { pagTipo:'', pagBanco:'', pagEntrada:'', pagEntradaValor:'' };
 }
 
 function normKey(s) {
