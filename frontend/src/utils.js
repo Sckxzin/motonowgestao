@@ -110,6 +110,25 @@ const REPASSE = {
 export const FILIAIS_REPASSE = ['SAO JOSE','MARAGOGI','CATENDE','XEXEU'];
 export const FORMAS_PGTO = ['PIX','À VISTA','DÉBITO','CRÉDITO','GARANTIA','E-commerce'];
 export const COMO_CHEGOU = ['Tenda','Veio em loja','Leads'];
+export const BANCOS_FINANCIAMENTO = ['BANCO PAN','MOTRIX','BV','MOTO DA GENTE','BRADESCO'];
+
+// Monta um texto padronizado de forma_pagamento (venda de moto) a partir das
+// escolhas estruturadas do modal, em vez de deixar o vendedor digitar livre.
+export function montarFormaPagamento({ pagTipo, pagBanco, pagEntrada }) {
+  if (pagTipo === 'FINANCIADO') return `FINANCIADO - ${pagBanco || '(banco não informado)'} - ${pagEntrada === 'COM' ? 'COM ENTRADA' : 'SEM ENTRADA'}`;
+  if (pagTipo === 'A_VISTA') return 'À VISTA';
+  return '';
+}
+// Tenta reconstruir as escolhas estruturadas a partir de um forma_pagamento
+// já salvo (pra pré-preencher o modal de editar). Texto antigo/livre que não
+// bate com o padrão fica com tudo vazio — o usuário escolhe de novo.
+export function parseFormaPagamento(raw) {
+  const s = String(raw||'').trim().toUpperCase();
+  if (s === 'À VISTA' || s === 'A VISTA') return { pagTipo:'A_VISTA', pagBanco:'', pagEntrada:'' };
+  const m = s.match(/^FINANCIADO - (.+) - (COM|SEM) ENTRADA$/);
+  if (m) return { pagTipo:'FINANCIADO', pagBanco:m[1], pagEntrada:m[2] };
+  return { pagTipo:'', pagBanco:'', pagEntrada:'' };
+}
 
 function normKey(s) {
   return String(s||'').toUpperCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/[^A-Z0-9]/g,'');

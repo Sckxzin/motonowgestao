@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import Topbar from '../components/Topbar';
 import useToast from '../hooks/useToast';
 import api from '../api';
-import { getUser, isDir, formatBRL, cidadeClass, MODELOS_MOTOS, FILIAIS, LOJAS_RETIRADA, FORMAS_PGTO, COMO_CHEGOU, isRepasseObrig, getRepasse, getValorCompra, getValorMinimoVenda, calcularValorLiquido, calcularComissaoComExcedente, findComissaoRow } from '../utils';
+import { getUser, isDir, formatBRL, cidadeClass, MODELOS_MOTOS, FILIAIS, LOJAS_RETIRADA, FORMAS_PGTO, COMO_CHEGOU, BANCOS_FINANCIAMENTO, montarFormaPagamento, isRepasseObrig, getRepasse, getValorCompra, getValorMinimoVenda, calcularValorLiquido, calcularComissaoComExcedente, findComissaoRow } from '../utils';
 
 function StatusBadge({ status = '', negociadoPor = null, usuarios = [] }) {
   const cls = `badge st-${status.toLowerCase()}`;
@@ -171,8 +171,10 @@ export default function Home() {
     if (!vf.clienteNome || !vf.valor || !vf.filialVenda || !vf.numero) { show('Preencha os campos obrigatórios', 'err'); return; }
     const cpfDigits = String(vf.cpf||'').replace(/\D/g,'');
     if (cpfDigits.length !== 11) { show('CPF é obrigatório (11 dígitos) — precisa pra emitir a nota certinho', 'err'); return; }
+    if (!vf.pagTipo) { show('Selecione a forma de pagamento', 'err'); return; }
+    if (vf.pagTipo==='FINANCIADO' && (!vf.pagBanco || !vf.pagEntrada)) { show('Selecione o banco e se teve entrada', 'err'); return; }
     try {
-      await api.post('/motos/vender', { moto_id:motoVenda.id, nome_cliente:vf.clienteNome, cpf:vf.cpf||null, numero_cliente:vf.numero, valor:Number(vf.valor), forma_pagamento:vf.pagamento||null, brinde:!!vf.brinde, gasolina:vf.gasolina?Number(vf.gasolina):null, como_chegou:vf.chegou||null, filial_venda:vf.filialVenda, local_retirada:vf.localRet||null, filial_retirada:vf.localRet==='LOJA'?vf.lojaRet:null, emplacamento:!!vf.emplacamento, entrega_km:vf.localRet==='ENTREGA'&&vf.km?Number(vf.km):null, end_cep:vf.endCep||null, end_rua:vf.endRua||null, end_numero:vf.endNumero||null, end_complemento:vf.endComplemento||null, end_bairro:vf.endBairro||null, end_cidade:vf.endCidade||null, end_uf:vf.endUf||null });
+      await api.post('/motos/vender', { moto_id:motoVenda.id, nome_cliente:vf.clienteNome, cpf:vf.cpf||null, numero_cliente:vf.numero, valor:Number(vf.valor), forma_pagamento:montarFormaPagamento(vf), brinde:!!vf.brinde, gasolina:vf.gasolina?Number(vf.gasolina):null, como_chegou:vf.chegou||null, filial_venda:vf.filialVenda, local_retirada:vf.localRet||null, filial_retirada:vf.localRet==='LOJA'?vf.lojaRet:null, emplacamento:!!vf.emplacamento, entrega_km:vf.localRet==='ENTREGA'&&vf.km?Number(vf.km):null, end_cep:vf.endCep||null, end_rua:vf.endRua||null, end_numero:vf.endNumero||null, end_complemento:vf.endComplemento||null, end_bairro:vf.endBairro||null, end_cidade:vf.endCidade||null, end_uf:vf.endUf||null });
       setMotoVenda(null); show('Solicitação enviada para aprovação!'); loadMotos();
     } catch (e) { show(String(e), 'err'); }
   }
@@ -434,7 +436,7 @@ export default function Home() {
                   <td><StatusBadge status={m.status} negociadoPor={m.negociacao_por} usuarios={usuarios} /></td>
                   <td><div style={{display:'flex',gap:5,flexWrap:'wrap'}}>
                     {m.status==='DISPONIVEL' && <>
-                      <button className="ab red" onClick={()=>{setMotoVenda(m);setVf({clienteNome:'',cpf:'',valor:'',numero:'',gasolina:'',pagamento:'',chegou:'',filialVenda:'',localRet:'',lojaRet:'',km:'',brinde:false,emplacamento:false});setClienteBuscado(null);}}>Vender</button>
+                      <button className="ab red" onClick={()=>{setMotoVenda(m);setVf({clienteNome:'',cpf:'',valor:'',numero:'',gasolina:'',pagTipo:'',pagBanco:'',pagEntrada:'',chegou:'',filialVenda:'',localRet:'',lojaRet:'',km:'',brinde:false,emplacamento:false});setClienteBuscado(null);}}>Vender</button>
                       <button className="ab" onClick={()=>alterarStatus(m.id,'NEGOCIACAO')}>🤝</button>
                     </>}
                     {m.status==='NEGOCIACAO' && (isDir(user)||m.negociacao_por===user.id) && <button className="ab" onClick={()=>alterarStatus(m.id,'DISPONIVEL')}>↩</button>}
@@ -530,7 +532,13 @@ export default function Home() {
             </select>
           </div>
           <div className="g2">
-            <div className="field"><label>Pagamento</label><input className="inp" placeholder="PIX + Crédito..." value={vf.pagamento||''} onChange={e=>setVf({...vf,pagamento:e.target.value})} /></div>
+            <div className="field"><label>Pagamento *</label>
+              <select className="inp" value={vf.pagTipo||''} onChange={e=>setVf({...vf,pagTipo:e.target.value,pagBanco:'',pagEntrada:''})}>
+                <option value="">Selecione</option>
+                <option value="A_VISTA">À vista</option>
+                <option value="FINANCIADO">Financiado</option>
+              </select>
+            </div>
             <div className="field"><label>Como chegou</label>
               <select className="inp" value={vf.chegou||''} onChange={e=>setVf({...vf,chegou:e.target.value})}>
                 <option value="">Selecione</option>
@@ -538,6 +546,21 @@ export default function Home() {
               </select>
             </div>
           </div>
+          {vf.pagTipo==='FINANCIADO' && <div className="g2">
+            <div className="field"><label>Banco *</label>
+              <select className="inp" value={vf.pagBanco||''} onChange={e=>setVf({...vf,pagBanco:e.target.value})}>
+                <option value="">Selecione</option>
+                {BANCOS_FINANCIAMENTO.map(b=><option key={b}>{b}</option>)}
+              </select>
+            </div>
+            <div className="field"><label>Entrada *</label>
+              <select className="inp" value={vf.pagEntrada||''} onChange={e=>setVf({...vf,pagEntrada:e.target.value})}>
+                <option value="">Selecione</option>
+                <option value="COM">Com entrada</option>
+                <option value="SEM">Sem entrada</option>
+              </select>
+            </div>
+          </div>}
           <div className="field"><label>Loja de retirada</label>
             <select className="inp" value={vf.localRet||''} onChange={e=>setVf({...vf,localRet:e.target.value})}>
               <option value="">Selecione</option>
