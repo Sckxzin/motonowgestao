@@ -14,7 +14,7 @@ function formatBRL(v) { return Number(v||0).toLocaleString('pt-BR',{style:'curre
 
 app.use(cors({ origin: '*', methods: ['GET','POST','PUT','PATCH','DELETE','OPTIONS'], allowedHeaders: ['Content-Type','Authorization'] }));
 app.options('*', cors());
-app.use(express.json());
+app.use(express.json({ limit: '8mb' }));
 
 function auth(req, res, next) {
   const h = req.headers.authorization;
@@ -439,7 +439,8 @@ app.post('/motos/transferir', auth, adminOnly, async (req, res) => {
   finally { client.release(); }
 });
 app.post('/motos/vender', auth, async (req, res) => {
-  const { moto_id, nome_cliente, cpf, numero_cliente, valor, forma_pagamento, brinde, gasolina, como_chegou, filial_venda, local_retirada, filial_retirada, data_venda, cliente_id, emplacamento, entrega_km, end_cep, end_rua, end_numero, end_complemento, end_bairro, end_cidade, end_uf } = req.body;
+  const { moto_id, nome_cliente, cpf, numero_cliente, valor, forma_pagamento, brinde, gasolina, como_chegou, filial_venda, local_retirada, filial_retirada, data_venda, cliente_id, emplacamento, entrega_km, end_cep, end_rua, end_numero, end_complemento, end_bairro, end_cidade, end_uf, termo_garantia_base64, termo_garantia_mime, termo_garantia_nome } = req.body;
+  if (termo_garantia_base64 && (termo_garantia_base64.length > 7 * 1024 * 1024 || !['image/jpeg','image/png','image/webp'].includes(termo_garantia_mime))) return res.status(400).json({ error:'O termo deve ser JPG, PNG ou WEBP de até 5 MB.' });
   if (!moto_id||!filial_venda||!nome_cliente||!valor) return res.status(400).json({ error:'Dados incompletos' });
   // CPF obrigatório — é a chave usada pra achar/criar o cliente no GestãoClick
   // na hora de gerar a nota; sem ele a venda não tem como ir pra lá certinho.
@@ -477,8 +478,8 @@ app.post('/motos/vender', auth, async (req, res) => {
       if (!jaTem.rows[0]) await client.query('INSERT INTO cliente_motos(cliente_id,chassi,modelo,cor,ano) VALUES($1,$2,$3,$4,$5)',
         [cliId, moto.chassi, moto.modelo, moto.cor, moto.ano_moto]);
     }
-    const p = await client.query(`INSERT INTO vendas_motos_pendentes(moto_id,modelo,cor,chassi,filial_origem,filial_venda,nome_cliente,cpf,numero_cliente,valor,forma_pagamento,brinde,gasolina,como_chegou,local_retirada,filial_retirada,santander,cnpj_empresa,valor_compra,repasse,comissao_valor,cliente_id,data_venda,emplacamento,entrega_km,end_cep,end_rua,end_numero,end_complemento,end_bairro,end_cidade,end_uf) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29,$30,$31,$32) RETURNING id`,
-      [moto.id,moto.modelo,moto.cor,moto.chassi,moto.filial,filial_venda,nome_cliente,cpf||null,numero_cliente||null,Number(valor),forma_pagamento||null,brinde?1:0,gasolina?Number(gasolina):null,como_chegou||null,local_retirada||null,filial_retirada||null,moto.santander,moto.cnpj_empresa,moto.valor_compra,rep,comissao,cliId,data_venda||null,emplacamento?1:0,entrega_km?Number(entrega_km):null,end_cep||null,end_rua||null,end_numero||null,end_complemento||null,end_bairro||null,end_cidade||null,end_uf||null]);
+    const p = await client.query(`INSERT INTO vendas_motos_pendentes(moto_id,modelo,cor,chassi,filial_origem,filial_venda,nome_cliente,cpf,numero_cliente,valor,forma_pagamento,brinde,gasolina,como_chegou,local_retirada,filial_retirada,santander,cnpj_empresa,valor_compra,repasse,comissao_valor,cliente_id,data_venda,emplacamento,entrega_km,end_cep,end_rua,end_numero,end_complemento,end_bairro,end_cidade,end_uf,termo_garantia,termo_garantia_mime,termo_garantia_nome) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29,$30,$31,$32,$33,$34,$35) RETURNING id`,
+      [moto.id,moto.modelo,moto.cor,moto.chassi,moto.filial,filial_venda,nome_cliente,cpf||null,numero_cliente||null,Number(valor),forma_pagamento||null,brinde?1:0,gasolina?Number(gasolina):null,como_chegou||null,local_retirada||null,filial_retirada||null,moto.santander,moto.cnpj_empresa,moto.valor_compra,rep,comissao,cliId,data_venda||null,emplacamento?1:0,entrega_km?Number(entrega_km):null,end_cep||null,end_rua||null,end_numero||null,end_complemento||null,end_bairro||null,end_cidade||null,end_uf||null,termo_garantia_base64?Buffer.from(termo_garantia_base64,'base64'):null,termo_garantia_base64?termo_garantia_mime:null,termo_garantia_base64?String(termo_garantia_nome||'termo-garantia').slice(0,180):null]);
     await client.query("UPDATE motos SET status='PENDENTE_APROVACAO' WHERE id=$1", [moto.id]);
     await client.query('COMMIT');
     res.json({ id:p.rows[0].id });
@@ -490,8 +491,8 @@ app.get('/pendentes', auth, adminOnly, async (_, res) => {
   // gc_venda_id vira '__ENVIANDO__' por um instante enquanto uma requisição de
   // envio pro GestãoClick está em andamento (trava contra clique duplo) — nunca
   // deve aparecer pro front, então mascara como se ainda não tivesse sido enviada.
-  res.json(await db.q("SELECT *, CASE WHEN gc_venda_id='__ENVIANDO__' THEN NULL ELSE gc_venda_id END AS gc_venda_id_masc FROM vendas_motos_pendentes WHERE status='PENDENTE' ORDER BY created_at DESC")
-    .then(rows => rows.map(r => ({ ...r, gc_venda_id: r.gc_venda_id_masc, gc_venda_id_masc: undefined }))));
+  res.json((await db.q("SELECT *, CASE WHEN gc_venda_id='__ENVIANDO__' THEN NULL ELSE gc_venda_id END AS gc_venda_id_masc FROM vendas_motos_pendentes WHERE status='PENDENTE' ORDER BY created_at DESC"))
+    .map(({ termo_garantia, ...r }) => ({ ...r, termo_garantia_anexado: !!termo_garantia, gc_venda_id: r.gc_venda_id_masc, gc_venda_id_masc: undefined })));
 });
 app.post('/pendentes/:id/aprovar', auth, adminOnly, async (req, res) => {
   const { entrega_valor, emplacamento } = req.body;
@@ -518,12 +519,12 @@ app.post('/pendentes/:id/aprovar', auth, adminOnly, async (req, res) => {
     const comRows = await client.query('SELECT * FROM comissoes WHERE modelo ILIKE $1 LIMIT 1', [p.modelo]);
     const valorLiquido = calcularValorLiquido({ valor:p.valor, brinde:p.brinde, gasolina:p.gasolina, entrega_valor:entregaValor, emplacamento:emplacamentoValor });
     const comissaoFinal = calcularComissaoComExcedente(comRows.rows[0], valorLiquido);
-    const novaVenda = (await client.query(`INSERT INTO vendas_motos(moto_id,modelo,cor,chassi,filial_origem,filial_venda,nome_cliente,cpf,numero_cliente,valor,forma_pagamento,brinde,gasolina,como_chegou,local_retirada,filial_retirada,santander,cnpj_empresa,valor_compra,repasse,comissao_valor,data_venda,emplacamento,entrega_km,entrega_valor,end_cep,end_rua,end_numero,end_complemento,end_bairro,end_cidade,end_uf,gc_venda_id,gc_venda_codigo,gc_cliente_id,gc_enviado_em,gc_manual) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29,$30,$31,$32,$33,$34,$35,$36,$37) RETURNING *`,
+    const novaVenda = (await client.query(`INSERT INTO vendas_motos(moto_id,modelo,cor,chassi,filial_origem,filial_venda,nome_cliente,cpf,numero_cliente,valor,forma_pagamento,brinde,gasolina,como_chegou,local_retirada,filial_retirada,santander,cnpj_empresa,valor_compra,repasse,comissao_valor,data_venda,emplacamento,entrega_km,entrega_valor,end_cep,end_rua,end_numero,end_complemento,end_bairro,end_cidade,end_uf,gc_venda_id,gc_venda_codigo,gc_cliente_id,gc_enviado_em,gc_manual,termo_garantia,termo_garantia_mime,termo_garantia_nome) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29,$30,$31,$32,$33,$34,$35,$36,$37,$38,$39,$40) RETURNING *`,
       [p.moto_id,p.modelo,p.cor,p.chassi,p.filial_origem,p.filial_venda,p.nome_cliente,p.cpf,p.numero_cliente,p.valor,p.forma_pagamento,p.brinde,p.gasolina,p.como_chegou,p.local_retirada,p.filial_retirada,p.santander,p.cnpj_empresa,p.valor_compra,rep,comissaoFinal,
        p.data_venda||new Date().toISOString().slice(0,10), // ← USA DATA DA VENDA, não NOW()
        emplacamentoValor,p.entrega_km,entregaValor,
        p.end_cep,p.end_rua,p.end_numero,p.end_complemento,p.end_bairro,p.end_cidade,p.end_uf,
-       p.gc_venda_id,p.gc_venda_codigo,p.gc_cliente_id,p.gc_enviado_em,p.gc_manual])).rows[0];
+       p.gc_venda_id,p.gc_venda_codigo,p.gc_cliente_id,p.gc_enviado_em,p.gc_manual,p.termo_garantia||null,p.termo_garantia_mime||null,p.termo_garantia_nome||null])).rows[0];
     if (p.brinde) {
       const cap = await client.query("SELECT * FROM pecas WHERE nome ILIKE '%CAPACETE%' AND cidade=$1 AND estoque>0 LIMIT 1", [p.filial_venda]);
       if (!cap.rows[0]) throw new Error('Sem capacete em estoque');
@@ -653,7 +654,45 @@ app.post('/pendentes/:id/recusar', auth, adminOnly, async (req, res) => {
 });
 
 app.get('/vendas-motos', auth, adminOnly, async (_, res) => {
-  res.json(await db.q('SELECT * FROM vendas_motos ORDER BY data_venda DESC, created_at DESC'));
+  const rows = await db.q('SELECT * FROM vendas_motos ORDER BY data_venda DESC, created_at DESC');
+  res.json(rows.map(({ termo_garantia, ...v }) => ({ ...v, termo_garantia_anexado: !!termo_garantia })));
+});
+function validarTermo(req, res) {
+  const { termo_garantia_base64, termo_garantia_mime } = req.body || {};
+  if (!termo_garantia_base64) { res.status(400).json({ error:'Selecione uma imagem do termo.' }); return false; }
+  if (termo_garantia_base64.length > 7 * 1024 * 1024 || !['image/jpeg','image/png','image/webp'].includes(termo_garantia_mime)) {
+    res.status(400).json({ error:'Use JPG, PNG ou WEBP de até 5 MB.' }); return false;
+  }
+  return true;
+}
+app.post('/pendentes/:id/termo-garantia', auth, adminOnly, async (req, res) => {
+  if (!validarTermo(req, res)) return;
+  const { termo_garantia_base64, termo_garantia_mime, termo_garantia_nome } = req.body;
+  try {
+    const r = await db.one('UPDATE vendas_motos_pendentes SET termo_garantia=$1, termo_garantia_mime=$2, termo_garantia_nome=$3 WHERE id=$4 AND status=\'PENDENTE\' RETURNING id',
+      [Buffer.from(termo_garantia_base64,'base64'), termo_garantia_mime, String(termo_garantia_nome||'termo-garantia').slice(0,180), req.params.id]);
+    if (!r) return res.status(404).json({ error:'Pendência não encontrada.' });
+    res.json({ ok:true });
+  } catch(e) { res.status(500).json({ error:e.message }); }
+});
+app.post('/vendas-motos/:id/termo-garantia', auth, adminOnly, async (req, res) => {
+  if (!validarTermo(req, res)) return;
+  const { termo_garantia_base64, termo_garantia_mime, termo_garantia_nome } = req.body;
+  try {
+    const r = await db.one('UPDATE vendas_motos SET termo_garantia=$1, termo_garantia_mime=$2, termo_garantia_nome=$3 WHERE id=$4 RETURNING id',
+      [Buffer.from(termo_garantia_base64,'base64'), termo_garantia_mime, String(termo_garantia_nome||'termo-garantia').slice(0,180), req.params.id]);
+    if (!r) return res.status(404).json({ error:'Venda não encontrada.' });
+    res.json({ ok:true });
+  } catch(e) { res.status(500).json({ error:e.message }); }
+});
+app.get('/vendas-motos/:id/termo-garantia', auth, adminOnly, async (req, res) => {
+  try {
+    const file = await db.one('SELECT termo_garantia, termo_garantia_mime, termo_garantia_nome FROM vendas_motos WHERE id=$1', [req.params.id]);
+    if (!file?.termo_garantia) return res.status(404).json({ error:'Termo não encontrado.' });
+    res.setHeader('Content-Type', file.termo_garantia_mime||'application/octet-stream');
+    res.setHeader('Content-Disposition', 'inline; filename*=UTF-8\'\'' + encodeURIComponent(file.termo_garantia_nome||'termo-garantia'));
+    res.send(file.termo_garantia);
+  } catch(e) { res.status(500).json({ error:e.message }); }
 });
 app.put('/vendas-motos/:id', auth, adminOnly, async (req, res) => {
   try {
@@ -973,6 +1012,12 @@ const migracoesProntas = (async () => { try {
   await db.run(`CREATE TABLE IF NOT EXISTS log_atividades (id SERIAL PRIMARY KEY, usuario_id INTEGER, username TEXT, acao TEXT NOT NULL, entidade TEXT, entidade_id TEXT, descricao TEXT, created_at TIMESTAMPTZ DEFAULT NOW())`);
   await db.run(`CREATE TABLE IF NOT EXISTS notificacoes (id SERIAL PRIMARY KEY, tipo TEXT NOT NULL, titulo TEXT NOT NULL, mensagem TEXT, filial TEXT, lida INTEGER DEFAULT 0, created_at TIMESTAMPTZ DEFAULT NOW())`);
   await db.run(`CREATE TABLE IF NOT EXISTS historico_precos (id SERIAL PRIMARY KEY, moto_id INTEGER NOT NULL, chassi TEXT, modelo TEXT, campo TEXT NOT NULL, valor_anterior REAL, valor_novo REAL, alterado_por TEXT, created_at TIMESTAMPTZ DEFAULT NOW())`);
+  await db.run(`ALTER TABLE vendas_motos_pendentes ADD COLUMN IF NOT EXISTS termo_garantia BYTEA`);
+  await db.run(`ALTER TABLE vendas_motos_pendentes ADD COLUMN IF NOT EXISTS termo_garantia_mime TEXT`);
+  await db.run(`ALTER TABLE vendas_motos_pendentes ADD COLUMN IF NOT EXISTS termo_garantia_nome TEXT`);
+  await db.run(`ALTER TABLE vendas_motos ADD COLUMN IF NOT EXISTS termo_garantia BYTEA`);
+  await db.run(`ALTER TABLE vendas_motos ADD COLUMN IF NOT EXISTS termo_garantia_mime TEXT`);
+  await db.run(`ALTER TABLE vendas_motos ADD COLUMN IF NOT EXISTS termo_garantia_nome TEXT`);
   await db.run(`ALTER TABLE vendas_motos ADD COLUMN IF NOT EXISTS gc_venda_id TEXT`);
   await db.run(`ALTER TABLE vendas_motos ADD COLUMN IF NOT EXISTS gc_venda_codigo TEXT`);
   await db.run(`ALTER TABLE vendas_motos ADD COLUMN IF NOT EXISTS gc_cliente_id TEXT`);
