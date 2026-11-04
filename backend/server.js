@@ -1195,13 +1195,28 @@ app.put('/motos/:id', auth, adminOnly, async (req, res) => {
   } catch(e) { res.status(500).json({ error:e.message }); }
 });
 app.delete('/motos/:id', auth, adminOnly, async (req, res) => {
+  const client = await db.connect();
   try {
-    const m = await db.one('SELECT status FROM motos WHERE id=$1',[req.params.id]);
-    if (!m) return res.status(404).json({ error:'Nao encontrada' });
-    if (m.status==='VENDIDA') return res.status(400).json({ error:'Nao e possivel excluir moto ja vendida' });
-    await db.run('DELETE FROM motos WHERE id=$1',[req.params.id]);
+    await client.query('BEGIN');
+    const m = (await client.query('SELECT status FROM motos WHERE id=$1 FOR UPDATE',[req.params.id])).rows[0];
+    if (!m) { await client.query('ROLLBACK'); return res.status(404).json({ error:'Nao encontrada' }); }
+    if (m.status==='VENDIDA') { await client.query('ROLLBACK'); return res.status(400).json({ error:'Nao e possivel excluir moto ja vendida' }); }
+    // vendas_motos_pendentes tem FK pra motos — se tiver uma pendência de
+    // verdade (ainda aguardando aprovação) não deixa excluir, a diretoria
+    // precisa aprovar ou recusar primeiro. Pendências já RECUSADAS são só
+    // histórico de uma tentativa que não foi pra frente — essas apagamos
+    // junto, senão a moto nunca consegue ser excluída (é o que travava antes).
+    const pendentePendente = await client.query("SELECT id FROM vendas_motos_pendentes WHERE moto_id=$1 AND status='PENDENTE' LIMIT 1", [req.params.id]);
+    if (pendentePendente.rows[0]) {
+      await client.query('ROLLBACK');
+      return res.status(400).json({ error:'Essa moto tem uma venda pendente de aprovação — aprove ou recuse antes de excluir.' });
+    }
+    await client.query("DELETE FROM vendas_motos_pendentes WHERE moto_id=$1 AND status<>'PENDENTE'", [req.params.id]);
+    await client.query('DELETE FROM motos WHERE id=$1',[req.params.id]);
+    await client.query('COMMIT');
     res.json({ ok:true });
-  } catch(e) { res.status(500).json({ error:e.message }); }
+  } catch(e) { await client.query('ROLLBACK'); res.status(500).json({ error:e.message }); }
+  finally { client.release(); }
 });
 
 app.get('/financeiro-dashboard', auth, adminOnly, async (req, res) => {
