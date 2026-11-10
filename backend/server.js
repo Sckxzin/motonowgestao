@@ -26,6 +26,15 @@ function adminOnly(req, res, next) {
   if (req.user.role !== 'DIRETORIA') return res.status(403).json({ error: 'Acesso restrito' });
   next();
 }
+// Auth separada pra integração com outro sistema (ex: financeiro/contábil) — chave
+// fixa por cabeçalho, sem login de usuário/JWT.
+function externalApiAuth(req, res, next) {
+  const configured = process.env.EXTERNAL_API_KEY;
+  if (!configured) return res.status(503).json({ error: 'API externa não configurada (defina EXTERNAL_API_KEY no ambiente)' });
+  const key = req.headers['x-api-key'];
+  if (!key || key !== configured) return res.status(401).json({ error: 'API key inválida' });
+  next();
+}
 
 const FILIAIS_VER_TUDO = ['SAO JOSE','ESCADA','IPOJUCA'];
 
@@ -1332,6 +1341,62 @@ app.post('/comissoes', auth, adminOnly, async (req, res) => {
 app.delete('/comissoes/:id', auth, adminOnly, async (req, res) => {
   try { await db.run('DELETE FROM comissoes WHERE id=$1',[req.params.id]); res.json({ ok:true }); }
   catch(e) { res.status(500).json({ error:e.message }); }
+});
+
+// ═══════════════════════════════════════════
+// API EXTERNA (somente leitura) — pra outro sistema interno (ex: financeiro)
+// consumir via X-API-Key, sem precisar de login de usuário.
+// ═══════════════════════════════════════════
+app.get('/externo/vendas-motos', externalApiAuth, async (req, res) => {
+  try {
+    const { desde, ate, filial } = req.query;
+    const conds = []; const params = [];
+    if (desde) { params.push(desde); conds.push(`data_venda >= $${params.length}`); }
+    if (ate)   { params.push(ate);   conds.push(`data_venda <= $${params.length}`); }
+    if (filial){ params.push(filial);conds.push(`filial_venda ILIKE $${params.length}`); }
+    const where = conds.length ? 'WHERE ' + conds.join(' AND ') : '';
+    const [vendas, comissoes] = await Promise.all([
+      db.q(`SELECT id,modelo,cor,chassi,filial_origem,filial_venda,nome_cliente,cpf,valor,forma_pagamento,brinde,gasolina,entrega_valor,emplacamento,valor_compra,repasse,comissao_valor,data_venda FROM vendas_motos ${where} ORDER BY data_venda DESC`, params),
+      db.q('SELECT * FROM comissoes'),
+    ]);
+    const out = vendas.map(v => {
+      const comRow = comissoes.find(c => String(c.modelo||'').toUpperCase().trim() === String(v.modelo||'').toUpperCase().trim());
+      const valorLiquido = calcularValorLiquido({ valor:v.valor, brinde:v.brinde, gasolina:v.gasolina, entrega_valor:v.entrega_valor, emplacamento:v.emplacamento });
+      return { ...v, valor_liquido:valorLiquido, comissao: calcularComissaoComExcedente(comRow, valorLiquido) };
+    });
+    res.json(out);
+  } catch(e) { res.status(500).json({ error:e.message }); }
+});
+app.get('/externo/motos', externalApiAuth, async (req, res) => {
+  try {
+    const { status, filial } = req.query;
+    const conds = []; const params = [];
+    if (status) { params.push(status); conds.push(`status ILIKE $${params.length}`); }
+    if (filial) { params.push(filial); conds.push(`filial ILIKE $${params.length}`); }
+    const where = conds.length ? 'WHERE ' + conds.join(' AND ') : '';
+    res.json(await db.q(`SELECT id,modelo,cor,chassi,filial,status,santander,valor_compra,valor_minimo_venda,repasse,negociacao_em,data_venda FROM motos ${where} ORDER BY modelo`, params));
+  } catch(e) { res.status(500).json({ error:e.message }); }
+});
+app.get('/externo/financeiro', externalApiAuth, async (req, res) => {
+  try {
+    const { desde, ate } = req.query;
+    const conds = []; const params = [];
+    if (desde) { params.push(desde); conds.push(`data >= $${params.length}`); }
+    if (ate)   { params.push(ate);   conds.push(`data <= $${params.length}`); }
+    const where = conds.length ? 'WHERE ' + conds.join(' AND ') : '';
+    res.json(await db.q(`SELECT * FROM financeiro ${where} ORDER BY data ASC`, params));
+  } catch(e) { res.status(500).json({ error:e.message }); }
+});
+app.get('/externo/resumo', externalApiAuth, async (req, res) => {
+  try {
+    const [pecasPorCidade, motosPorFilial, estoquePorStatus, ultimoFinanceiro] = await Promise.all([
+      db.q('SELECT cidade,COUNT(*) as qtd,COALESCE(SUM(total),0) as faturamento FROM vendas GROUP BY cidade ORDER BY faturamento DESC'),
+      db.q('SELECT filial_venda as filial,COUNT(*) as qtd,COALESCE(SUM(valor),0) as faturamento FROM vendas_motos GROUP BY filial_venda ORDER BY faturamento DESC'),
+      db.q("SELECT status,COUNT(*) as qtd FROM motos GROUP BY status"),
+      db.one('SELECT * FROM financeiro ORDER BY data DESC LIMIT 1'),
+    ]);
+    res.json({ faturamento_pecas_por_filial:pecasPorCidade, faturamento_motos_por_filial:motosPorFilial, estoque_motos_por_status:estoquePorStatus, financeiro_mais_recente:ultimoFinanceiro });
+  } catch(e) { res.status(500).json({ error:e.message }); }
 });
 
 migracoesProntas.then(() => {
