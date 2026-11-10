@@ -1349,14 +1349,15 @@ app.delete('/comissoes/:id', auth, adminOnly, async (req, res) => {
 // ═══════════════════════════════════════════
 app.get('/externo/vendas-motos', externalApiAuth, async (req, res) => {
   try {
-    const { desde, ate, filial } = req.query;
+    const { desde, ate, filial, como_chegou } = req.query;
     const conds = []; const params = [];
     if (desde) { params.push(desde); conds.push(`data_venda >= $${params.length}`); }
     if (ate)   { params.push(ate);   conds.push(`data_venda <= $${params.length}`); }
     if (filial){ params.push(filial);conds.push(`filial_venda ILIKE $${params.length}`); }
+    if (como_chegou) { params.push(como_chegou); conds.push(`como_chegou ILIKE $${params.length}`); }
     const where = conds.length ? 'WHERE ' + conds.join(' AND ') : '';
     const [vendas, comissoes] = await Promise.all([
-      db.q(`SELECT id,modelo,cor,chassi,filial_origem,filial_venda,nome_cliente,cpf,valor,forma_pagamento,brinde,gasolina,entrega_valor,emplacamento,valor_compra,repasse,comissao_valor,data_venda FROM vendas_motos ${where} ORDER BY data_venda DESC`, params),
+      db.q(`SELECT id,modelo,cor,chassi,filial_origem,filial_venda,nome_cliente,cpf,valor,forma_pagamento,como_chegou,brinde,gasolina,entrega_valor,emplacamento,valor_compra,repasse,comissao_valor,data_venda FROM vendas_motos ${where} ORDER BY data_venda DESC`, params),
       db.q('SELECT * FROM comissoes'),
     ]);
     const out = vendas.map(v => {
