@@ -1400,6 +1400,64 @@ app.get('/externo/resumo', externalApiAuth, async (req, res) => {
   } catch(e) { res.status(500).json({ error:e.message }); }
 });
 
+// Recurso genérico — pra quem consome a API escolher o que quer, em vez de ficar
+// só nos 4 endpoints fixos de cima. Tabela e campos sempre batem contra uma
+// allowlist fixa (RECURSOS_EXTERNOS) antes de entrar na query SQL — nunca monta
+// SQL com nome de tabela/coluna vindo direto do request.
+const RECURSOS_EXTERNOS = {
+  vendas_motos: {
+    tabela: 'vendas_motos',
+    campos: ['id','modelo','cor','chassi','filial_origem','filial_venda','nome_cliente','cpf','valor','forma_pagamento','como_chegou','brinde','gasolina','entrega_valor','emplacamento','valor_compra','repasse','comissao_valor','santander','data_venda'],
+    campoData: 'data_venda',
+  },
+  motos: {
+    tabela: 'motos',
+    campos: ['id','modelo','cor','chassi','filial','status','santander','valor_compra','valor_minimo_venda','repasse','ano_moto','garantia_meses','negociacao_em','data_venda'],
+    campoData: 'data_venda',
+  },
+  financeiro: {
+    tabela: 'financeiro',
+    campos: ['id','data','saldo','a_receber','estoque_compra','estoque_venda','qtd_estoque','shineray','eduardo','fornecedor','jota_compra','jota_venda','observacao'],
+    campoData: 'data',
+  },
+  vendas_pecas: {
+    tabela: 'vendas',
+    campos: ['id','cliente_nome','cliente_telefone','forma_pagamento','total','cidade','observacao','modelo_moto','chassi_moto','km','rp','rr','created_at'],
+    campoData: 'created_at',
+  },
+  estoque_pecas: {
+    tabela: 'pecas',
+    campos: ['id','nome','preco','estoque','cidade','tipo_moto','modelos_compativeis'],
+    campoData: null,
+  },
+};
+app.get('/externo/recursos', externalApiAuth, (req, res) => {
+  res.json(Object.fromEntries(Object.entries(RECURSOS_EXTERNOS).map(([nome,r]) => [nome, { campos:r.campos, filtravel_por_data: !!r.campoData }])));
+});
+app.get('/externo/consulta', externalApiAuth, async (req, res) => {
+  try {
+    const { recurso, campos, desde, ate, limite, pagina, ...resto } = req.query;
+    const def = RECURSOS_EXTERNOS[recurso];
+    if (!def) return res.status(400).json({ error:`Recurso inválido. Use um de: ${Object.keys(RECURSOS_EXTERNOS).join(', ')} (veja GET /externo/recursos)` });
+    const camposPedidos = campos ? String(campos).split(',').map(c=>c.trim()).filter(c=>def.campos.includes(c)) : def.campos;
+    if (!camposPedidos.length) return res.status(400).json({ error:`Nenhum campo válido pedido. Campos disponíveis: ${def.campos.join(', ')}` });
+    const conds = []; const params = [];
+    if (desde && def.campoData) { params.push(desde); conds.push(`${def.campoData} >= $${params.length}`); }
+    if (ate   && def.campoData) { params.push(ate);   conds.push(`${def.campoData} <= $${params.length}`); }
+    for (const [k,v] of Object.entries(resto)) {
+      if (def.campos.includes(k) && v!=null && v!=='') { params.push(v); conds.push(`${k}::text ILIKE $${params.length}`); }
+    }
+    const where = conds.length ? 'WHERE ' + conds.join(' AND ') : '';
+    const lim = Math.min(Math.max(parseInt(limite)||200, 1), 500);
+    const pag = Math.max(parseInt(pagina)||1, 1);
+    params.push(lim); const limIdx = params.length;
+    params.push((pag-1)*lim); const offIdx = params.length;
+    const orderBy = def.campoData ? `ORDER BY ${def.campoData} DESC` : 'ORDER BY id DESC';
+    const rows = await db.q(`SELECT ${camposPedidos.join(',')} FROM ${def.tabela} ${where} ${orderBy} LIMIT $${limIdx} OFFSET $${offIdx}`, params);
+    res.json({ recurso, campos:camposPedidos, pagina:pag, limite:lim, total_retornado:rows.length, dados:rows });
+  } catch(e) { res.status(500).json({ error:e.message }); }
+});
+
 migracoesProntas.then(() => {
   app.listen(PORT, '0.0.0.0', () => console.log(`\n🚀 MotoNow API — porta ${PORT}`));
 });
