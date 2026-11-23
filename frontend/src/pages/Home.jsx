@@ -722,7 +722,7 @@ export default function Home() {
             <select className="inp" value={cadMf.modelo} onChange={e=>{
               const m=e.target.value; const cfg=MODELOS_MOTOS.find(x=>x.modelo===m);
               const vmin=getValorMinimoVenda(m);
-              if(cfg){const s=cfg.sant;setCadMf(p=>({...p,modelo:m,santander:s,valorCompra:String(s?cfg.santander:cfg.motonow),valorMinimoVenda:vmin?String(vmin):p.valorMinimoVenda}));}
+              if(cfg){const s=cfg.sant;const vc=getValorCompra(m,s,cadMf.filial);setCadMf(p=>({...p,modelo:m,santander:s,valorCompra:vc!==''?String(vc):p.valorCompra,valorMinimoVenda:vmin?String(vmin):p.valorMinimoVenda}));}
               else { setCadMf(p=>({...p,modelo:m,valorMinimoVenda:vmin?String(vmin):p.valorMinimoVenda})); }
             }}>
               <option value="">Selecione</option>
@@ -755,8 +755,9 @@ export default function Home() {
             <div className="field"><label>Filial *</label>
               <select className="inp" value={cadMf.filial} onChange={e=>{
                 const f=e.target.value;
-                if(isRepasseObrig(f)){const r=getRepasse(cadMf.modelo);setCadMf(p=>({...p,filial:f,repasse:r?String(r):p.repasse}));}
-                else setCadMf(p=>({...p,filial:f}));
+                const vc=getValorCompra(cadMf.modelo,cadMf.santander,f);
+                if(isRepasseObrig(f)){const r=getRepasse(cadMf.modelo);setCadMf(p=>({...p,filial:f,repasse:r?String(r):p.repasse,valorCompra:vc!==''?String(vc):p.valorCompra}));}
+                else setCadMf(p=>({...p,filial:f,valorCompra:vc!==''?String(vc):p.valorCompra}));
               }}>
                 <option value="">Selecione</option>
                 {filiaisAtivas.map(f=><option key={f.id}>{f.nome}</option>)}
@@ -766,8 +767,8 @@ export default function Home() {
           </div>
           <label className="ck" style={{marginBottom:16}}>
             <input type="checkbox" checked={cadMf.santander} onChange={e=>{
-              const s=e.target.checked; const vc=getValorCompra(cadMf.modelo,s);
-              setCadMf(p=>({...p,santander:s,valorCompra:vc?String(vc):p.valorCompra}));
+              const s=e.target.checked; const vc=getValorCompra(cadMf.modelo,s,cadMf.filial);
+              setCadMf(p=>({...p,santander:s,valorCompra:vc!==''?String(vc):p.valorCompra}));
             }} /> Financiada Santander (EMENEZES)
           </label>
           {loteResultado && (

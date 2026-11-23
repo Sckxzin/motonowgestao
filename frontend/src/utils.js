@@ -186,10 +186,17 @@ export function findComissaoRow(comissoes, modelo) {
     || comissoes.find(c => m.includes(String(c.modelo||'').toUpperCase().trim()) || String(c.modelo||'').toUpperCase().trim().includes(m))
     || null;
 }
-export function getValorCompra(modelo, santander) {
+// Filiais que operam como "Motocenter" — compram da distribuição por R$100 a
+// mais que as demais, em qualquer modelo.
+export const MOTOCENTER_FILIAIS = ['SAO JOSE', 'MARAGOGI', 'CATENDE'];
+export function isMotocenter(filial) {
+  return MOTOCENTER_FILIAIS.includes(String(filial || '').toUpperCase().normalize('NFD').replace(/[̀-ͯ]/g, '').trim());
+}
+export function getValorCompra(modelo, santander, filial) {
   const cfg = MODELOS_MOTOS.find(m => m.modelo === modelo);
   if (!cfg) return '';
-  return santander ? cfg.santander : cfg.motonow;
+  const base = santander ? cfg.santander : cfg.motonow;
+  return isMotocenter(filial) ? base + 100 : base;
 }
 
 export function formatBRL(v) {
