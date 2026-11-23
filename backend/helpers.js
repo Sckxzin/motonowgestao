@@ -44,6 +44,8 @@ const REPASSE_MAP = {
   [normKey('PHOENIX 50')]:       7100,
   [normKey('BICICLETA ELETRICA')]: 4000,
   [normKey('BIKE S 12')]:             0,
+  [normKey('SWM 400')]:               0,
+  [normKey('SE1')]:                   0,
 };
 function isRepasseObrigatorio(filial) {
   const f = String(filial||'').toUpperCase()
