@@ -114,7 +114,7 @@ const REPASSE = {
 export const FILIAIS_REPASSE = ['SAO JOSE','MARAGOGI','CATENDE','XEXEU'];
 export const FORMAS_PGTO = ['PIX','À VISTA','DÉBITO','CRÉDITO','GARANTIA','E-commerce'];
 export const COMO_CHEGOU = ['Tenda','Veio em loja','Leads'];
-export const BANCOS_FINANCIAMENTO = ['BANCO PAN','MOTRIX','BV','MOTO DA GENTE','BRADESCO'];
+export const BANCOS_FINANCIAMENTO = ['BANCO PAN','MOTRIX','BV','MOTO DA GENTE','BRADESCO','SANTANDER'];
 
 // Monta um texto padronizado de forma_pagamento (venda de moto) a partir das
 // escolhas estruturadas do modal, em vez de deixar o vendedor digitar livre.
